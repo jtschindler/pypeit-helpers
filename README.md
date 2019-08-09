@@ -2,8 +2,14 @@
 Useful python scripts to prepare the X-SHOOTER data (with raw calibrations) for reduction with PypeIt
 
 
-## Disclaimer
-While this code has been test for multiple XShooter data sets, it might still fail for your use case. Therefore, always make sure to check the output of the code, especially the 'suggestion_table.txt' before you blindly copy it to your pypeIT file and run it. For example, if the automatically given calibrations from the ESO archive do not provide a suitable arc, then the arc will be missing in the 'suggestion_table.txt'.
+## Disclaimers
+While this code has been test for multiple XShooter data sets, it might still fail for your use case. Therefore, always make sure to check the output of the code, especially the 'suggestion_table.txt' before you blindly copy it to your pypeIT file and run it. For example, if the automatically given calibrations from the ESO archive do not provide a suitable arc, then the arc will be missing in the 'vlt_xshooter...suggested_table.txt'.
+
+Sky standards ('STD,SKY') are currently ignored and will not be part of the 'vlt_xshooter...suggested_table.txt'.
+
+In some cases tellurics are not taken in sequences of even numbers of frames. In these cases the comb_id and bkg_id values will be wrong!
+
+If the '...suggested_table.txt' does not list calib values for your biases or pixelflats, you should consider to change the deltamjd variable (--deltamjd=[SOMENUMBER]). It is responsible to find calibration files close to your science/telluric observations.
 
 ## Purpose
 The provided python scripts prepare a folder with XShooter data for a pypeIT run. The data can either be automatically (data with raw calibrations) or manually downloaded from the ESO archive. At this moment it is only designed to work on the XShooter VIS and NIR arm. UVB data will be automatically disregarded.

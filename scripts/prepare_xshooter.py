@@ -35,7 +35,8 @@ def parse_arguments():
                              'provide clean setup tables only')
 
     parser.add_argument('--deltamjd', required=False, type=str,
-                        help='Set the value for the difference in mjds, '
+                        help='Set the value for the maximum difference in '
+                             'mjds, '
                              'which sets the association of bias, arc and '
                              'pixelflats to the science "calib" file. The '
                              'default value is 0.65')

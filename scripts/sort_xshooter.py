@@ -93,7 +93,8 @@ def make_image_df_xshooter(datapath, save=False, save_name=None, verbosity=0):
         hdr = hdu[0].header
 
         filename_list.append(file)
-        obs_name_list.append(hdr['HIERARCH ESO OBS NAME']) # Calibration' / OB
+        obs_name_list.append(hdr['HIERARCH ESO OBS NAME']) # Calibration'
+        # / OB
         # name
         objname_list.append(hdr['OBJECT']) # Original target
         programid_list.append(hdr['HIERARCH ESO OBS PROG ID']) # ESO program ID
@@ -181,7 +182,7 @@ def make_image_df_xshooter(datapath, save=False, save_name=None, verbosity=0):
 
 
 
-def clean_nir_table(df, data_dir, delta_mjd=0.65):
+def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
 
 
     # Change the airmass to a numeric value to sort on
@@ -192,7 +193,8 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65):
 
     # Select science images
     science_targets = df.query('frametype=="science" and target!="STD,'
-                               'TELLURIC"').copy()
+                               'TELLURIC" and target !="STD,SKY"').copy()
+
 
     # TAKE CARE of flux standards
     # Add flux standards to science list
@@ -203,6 +205,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65):
     sel_idx = science_targets.index
     df.loc[sel_idx, 'selected'] = True
 
+    # Sort science targets by mjd
     science_targets.sort_values('mjd', inplace=True)
     science_targets.reset_index(drop=True, inplace=True)
 
@@ -210,16 +213,71 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65):
     # Science Images
     # -------------------------------------------------------
 
-    # Renumber combination and background IDs
-    num = 1
-    for idx, index in enumerate(science_targets.index):
-        science_targets.loc[index,'comb_id'] = int(num)
-        if num % 2 == 0:
-            science_targets.loc[index, 'bkg_id'] = int(num - 1)
+    # For the science targets check the offsets along the slit
+    for index in science_targets.index:
+        filename = data_dir + science_targets.loc[index, 'filename']
+        hdr = fits.open(filename)[0].header
+        offset_x_name = 'HIERARCH ESO SEQ CUMOFF X'
+        if offset_x_name in hdr:
+            offset_x = hdr[offset_x_name]
         else:
-            science_targets.loc[index, 'bkg_id'] = int(num + 1)
-        science_targets.loc[index, 'calib'] = int(num)
-        num += 1
+            offset_x = 0
+        offset_y_name = 'HIERARCH ESO SEQ CUMOFF Y'
+        if offset_y_name in hdr:
+            offset_y = hdr[offset_y_name]
+        else:
+            offset_x = 0
+        science_targets.loc[index, 'slit_offset_x'] = offset_x
+        science_targets.loc[index, 'slit_offset_y'] = offset_y
+
+
+    # NEW
+    num = 1
+    # Resetting the comb_id and bkg_id values
+    science_targets.loc[:, 'comb_id'] = None
+    science_targets.loc[:, 'bkg_id'] = None
+
+    for index in science_targets.index:
+        combid = science_targets.loc[index, 'comb_id']
+        bkgid = science_targets.loc[index, 'bkg_id']
+        # Only populate comb_id and bkg_id, if they are empty
+        if combid is None and bkgid is None:
+            if index+1 in science_targets.index:
+                # Check if next telluric frame matches AB pattern
+                name = science_targets.loc[index, 'target']
+                next_name = science_targets.loc[index+1, 'target']
+                offset_diff = abs(science_targets.loc[index, 'slit_offset_y'] -
+                                  science_targets.loc[index+1, 'slit_offset_y'])
+
+                if name == next_name and offset_diff >3:
+                    science_targets.loc[index, 'comb_id'] = int(num)
+                    science_targets.loc[index+1, 'comb_id'] = int(num+1)
+                    science_targets.loc[index, 'bkg_id'] = int(num+1)
+                    science_targets.loc[index + 1, 'bkg_id'] = int(num)
+                    num += 2
+
+                else:
+                    science_targets.loc[index, 'comb_id'] = int(num)
+                    science_targets.loc[index, 'bkg_id'] = -1
+
+                    num += 1
+            else:
+                science_targets.loc[index, 'comb_id'] = int(num)
+                science_targets.loc[index, 'bkg_id'] = -1
+
+                num += 1
+
+
+    # Renumber combination and background IDs
+    # num = 1
+    # for idx, index in enumerate(science_targets.index):
+    #     science_targets.loc[index,'comb_id'] = int(num)
+    #     if num % 2 == 0:
+    #         science_targets.loc[index, 'bkg_id'] = int(num - 1)
+    #     else:
+    #         science_targets.loc[index, 'bkg_id'] = int(num + 1)
+    #     science_targets.loc[index, 'calib'] = int(num)
+    #     num += 1
 
     # Change frametype to 'tilt, arc,science'
     for idx, index in enumerate(science_targets.index):
@@ -247,6 +305,27 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65):
                         'decker=="{}" and binning=="{}"'.format(key[0],
                                                             key[1])).copy()
 
+        # For the science targets read the offsets along the slit and
+        # rename telluric target name according to header keyword
+        for index in tell.index:
+            filename = data_dir + tell.loc[index, 'filename']
+            hdr = fits.open(filename)[0].header
+            offset_x_name = 'HIERARCH ESO SEQ CUMOFF X'
+            if offset_x_name in hdr:
+                offset_x = hdr[offset_x_name]
+            else:
+                offset_x = 0
+            offset_y_name = 'HIERARCH ESO SEQ CUMOFF Y'
+            if offset_y_name in hdr:
+                offset_y = hdr[offset_y_name]
+            else:
+                offset_y = 0
+            tell.loc[index, 'slit_offset_x'] = offset_x
+            tell.loc[index, 'slit_offset_y'] = offset_y
+            target_name = hdr['HIERARCH ESO OBS TARG NAME']
+            tell.loc[index, 'target'] = target_name + '_tell'
+
+
         # Mark the selected tellurics frames
         sel_idx = tell.index
         df.loc[sel_idx, 'selected'] = True
@@ -269,21 +348,52 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65):
         tellurics = tellurics.append(tell)
 
     # Renumber combination and background IDs for the tellurics
-    for index in tellurics.index:
-        tellurics.loc[index, 'comb_id'] = int(num)
-        if num % 2 == 0:
-            tellurics.loc[index, 'bkg_id'] = int(num - 1)
-        else:
-            tellurics.loc[index, 'bkg_id'] = int(num + 1)
+    # The routine checks for AB pairs and treats single exposures correctly.
 
-        num += 1
+    # Resetting the comb_id and bkg_id values
+    tellurics.loc[:, 'comb_id'] = None
+    tellurics.loc[:, 'bkg_id'] = None
+    # Sort tellurics by mjd and reset index
+    # The assumption is that AB patterns will be consecutive in MJD
+    tellurics.sort_values('mjd', inplace=True)
+    tellurics.reset_index(drop=True, inplace=True)
 
-    # Rename telluric target name according to header keyword
+    print(tellurics.columns)
+    print(tellurics)
+
     for index in tellurics.index:
-        filename = data_dir + tellurics.loc[index, 'filename']
-        hdr = fits.open(filename)[0].header
-        target_name = hdr['HIERARCH ESO OBS NAME']
-        tellurics.loc[index, 'target'] = target_name+'_tell'
+        combid = tellurics.loc[index, 'comb_id']
+        bkgid = tellurics.loc[index, 'bkg_id']
+        # Only populate comb_id and bkg_id, if they are empty
+        if combid is None and bkgid is None:
+            if index+1 in tellurics.index:
+                # Check if next telluric frame matches AB pattern
+                name = tellurics.loc[index, 'target']
+                next_name = tellurics.loc[index+1, 'target']
+                offset_diff = abs(tellurics.loc[index, 'slit_offset_y'] -
+                                  tellurics.loc[index+1, 'slit_offset_y'])
+
+                if name == next_name and offset_diff >3:
+                    tellurics.loc[index, 'comb_id'] = int(num)
+                    tellurics.loc[index+1, 'comb_id'] = int(num+1)
+                    tellurics.loc[index, 'bkg_id'] = int(num+1)
+                    tellurics.loc[index + 1, 'bkg_id'] = int(num)
+                    num += 2
+
+                else:
+                    tellurics.loc[index, 'comb_id'] = int(num)
+                    tellurics.loc[index, 'bkg_id'] = -1
+
+                    num += 1
+            else:
+                tellurics.loc[index, 'comb_id'] = int(num)
+                tellurics.loc[index, 'bkg_id'] = -1
+
+                num += 1
+
+
+
+
 
     # Change first frametype of tellurics to standard
     for index in tellurics.index:
@@ -302,9 +412,14 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65):
                           'FLAT" and '
                         'decker=="{}" and binning=="{}"'.format(key[0],
                                                                 key[1])).copy()
-        # Only use every second pixelflat, as the other pixel flat are with
-        # the lamps off, to limit persistence.
-        # pflats = pflats[::2].copy()
+
+        if bias:
+            # The frametrype of every second pixelflat will be set to bias,
+            # as only half of the pixelflats are actually illuminated.
+            pflats.loc[pflats[1::2].index,'frametype'] = 'bias'
+            # pflats = pflats[::2].copy()
+            # biases = pflats[1::2].copy()
+
 
         # Select the pixelflats with the highest exposure time
         pflats_exp_list = list(pflats.exptime.value_counts().index)
@@ -345,6 +460,11 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65):
 
 
     # Consolidate all selected frames in one DataFrame
+    tellurics.drop(labels='slit_offset_x', axis=1, inplace=True)
+    tellurics.drop(labels='slit_offset_y', axis=1, inplace=True)
+    science_targets.drop(labels='slit_offset_x', axis=1, inplace=True)
+    science_targets.drop(labels='slit_offset_y', axis=1, inplace=True)
+
     pypeit_input = pd.DataFrame()
     pypeit_input = pypeit_input.append(science_targets)
     pypeit_input = pypeit_input.append(tellurics)
@@ -368,7 +488,10 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
 
     # Select science images
     science_targets = df.query('frametype=="science" and target!="STD,'
-                               'TELLURIC"').copy()
+                               'TELLURIC" and target !="STD,SKY"').copy()
+
+
+    print(science_targets)
 
     # TAKE CARE of flux standards
     # Add flux standards to science list
@@ -446,7 +569,7 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
 
         filename = data_dir + tellurics.loc[index, 'filename']
         hdr = fits.open(filename)[0].header
-        target_name = hdr['HIERARCH ESO OBS NAME']
+        target_name = hdr['HIERARCH ESO OBS TARG NAME']
         tellurics.loc[index, 'target'] = target_name + '_tell'
 
     # Change first frametype of tellurics to standard
