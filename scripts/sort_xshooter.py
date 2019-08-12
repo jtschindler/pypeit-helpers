@@ -721,33 +721,36 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
 
 
 def prepare_xshooter_data(path, obj_name, remove_originals=False,
-                          verbosity=0, mode=None, delta_mjd=0.65):
+                          verbosity=0, mode=None, delta_mjd=0.65, arm=None):
 
     if mode is None or mode == 'data':
 
         if verbosity > 0:
             print('[INFO] Preparing XShooter data')
 
-        if not os.path.exists(path+'/raw/{}/NIR/'.format(obj_name)):
-            if verbosity > 0:
-                print('[INFO] Creating /raw/{}/NIR directory'.format(obj_name))
-            os.makedirs(path+'/raw/{}/NIR/'.format(obj_name))
+        if arm is None or arm == 'VIS':
+            if not os.path.exists(path + '/reduced/{}/VIS/'.format(obj_name)):
+                if verbosity > 0:
+                    print('[INFO] Creating /reduced/{}/VIS directory'.format(
+                        obj_name))
+                os.makedirs(path + '/reduced/{}/VIS/'.format(obj_name))
 
-        if not os.path.exists(path+'/raw/{}/VIS/'.format(obj_name)):
-            if verbosity > 0:
-                print('[INFO] Creating /raw/{}/VIS directory'.format(obj_name))
-            os.makedirs(path+'/raw/{}/VIS/'.format(obj_name))
+            if not os.path.exists(path + '/raw/{}/VIS/'.format(obj_name)):
+                if verbosity > 0:
+                    print('[INFO] Creating /raw/{}/VIS directory'.format(
+                        obj_name))
+                os.makedirs(path + '/raw/{}/VIS/'.format(obj_name))
 
-        if not os.path.exists(path+'/reduced/{}/NIR/'.format(obj_name)):
-            if verbosity > 0:
-                print('[INFO] Creating /reduced/{}/NIR directory'.format(obj_name))
-            os.makedirs(path+'/reduced/{}/NIR/'.format(obj_name))
+        if arm is None or arm == 'NIR':
+            if not os.path.exists(path+'/raw/{}/NIR/'.format(obj_name)):
+                if verbosity > 0:
+                    print('[INFO] Creating /raw/{}/NIR directory'.format(obj_name))
+                os.makedirs(path+'/raw/{}/NIR/'.format(obj_name))
 
-        if not os.path.exists(path+'/reduced/{}/VIS/'.format(obj_name)):
-            if verbosity > 0:
-                print('[INFO] Creating /reduced/{}/VIS directory'.format(obj_name))
-            os.makedirs(path+'/reduced/{}/VIS/'.format(obj_name))
-
+            if not os.path.exists(path+'/reduced/{}/NIR/'.format(obj_name)):
+                if verbosity > 0:
+                    print('[INFO] Creating /reduced/{}/NIR directory'.format(obj_name))
+                os.makedirs(path+'/reduced/{}/NIR/'.format(obj_name))
 
         # remove all non-necessary files
         if verbosity > 0:
@@ -792,13 +795,15 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
             if fits_df.loc[idx, 'deleted']:
                 os.remove(filename)
             else:
-                if fits_df.loc[idx, 'arm'] == 'NIR':
+                if fits_df.loc[idx, 'arm'] == 'NIR' and (arm is None or arm
+                                                         == 'NIR'):
                     shutil.copy2(filename, '{}/raw/{}/{}/{}'.format(path, obj_name,
                                                                     'NIR',
                                                                     fits_name))
                     if remove_originals:
                         os.remove(filename)
-                elif fits_df.loc[idx, 'arm'] == 'VIS':
+                elif fits_df.loc[idx, 'arm'] == 'VIS' and (arm is None or arm
+                                                         == 'VIS'):
                     shutil.copy2(filename, '{}/raw/{}/{}/{}'.format(path,
                                                                     obj_name,
                                                                     'VIS',
@@ -816,17 +821,23 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
         rawobj_path = cwd+'/raw/{}'.format(obj_name)
         relraw_path = '../../../raw/{}'.format(obj_name)
 
-        if verbosity > 0:
-            print('[INFO] Run the preliminary VIS pypeit_setup')
-            print('[INFO] pypeit_setup -s vlt_xshooter_vis -r {}/VIS/'.format(relraw_path))
-        os.chdir(cwd+'/reduced/{}/VIS/'.format(obj_name))
-        os.system('pypeit_setup -s vlt_xshooter_vis -r {}/VIS/'.format(relraw_path))
+        if arm is None or arm == "VIS":
+            if verbosity > 0:
+                print('[INFO] Run the preliminary VIS pypeit_setup')
+                print('[INFO] pypeit_setup -s vlt_xshooter_vis -r {}'
+                      '/VIS/'.format(relraw_path))
+            os.chdir(cwd+'/reduced/{}/VIS/'.format(obj_name))
+            os.system('pypeit_setup -s vlt_xshooter_vis -r {}'
+                      '/VIS/'.format(relraw_path))
 
-        if verbosity > 0:
-            print('[INFO] Run the preliminary NIR pypeit_setup')
-            print('[INFO] pypeit_setup -s vlt_xshooter_nir -r {}/NIR/'.format(relraw_path))
-        os.chdir(cwd + '/reduced/{}/NIR/'.format(obj_name))
-        os.system('pypeit_setup -s vlt_xshooter_nir -r {}/NIR/'.format(relraw_path))
+        if arm is None or arm == "NIR":
+            if verbosity > 0:
+                print('[INFO] Run the preliminary NIR pypeit_setup')
+                print('[INFO] pypeit_setup -s vlt_xshooter_nir -r {}'
+                      '/NIR/'.format(relraw_path))
+            os.chdir(cwd + '/reduced/{}/NIR/'.format(obj_name))
+            os.system('pypeit_setup -s vlt_xshooter_nir -r {}'
+                      '/NIR/'.format(relraw_path))
 
 
 
@@ -836,67 +847,72 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
         rawobj_path = cwd+'/raw/{}'.format(obj_name)
         relraw_path = '../../../raw/{}'.format(obj_name)
 
-        if verbosity > 0:
-            print('[INFO] Run the VIS pypeit_setup')
-            print('[INFO] pypeit_setup -s vlt_xshooter_vis -r {}/VIS/ -b '
-                  '-c=all'.format(relraw_path))
-        os.chdir(cwd+'/reduced/{}/VIS/'.format(obj_name))
-        os.system('pypeit_setup -s vlt_xshooter_vis -r {}/VIS/ -b -c=all'.format(
-            relraw_path))
+        if arm is None or arm == "VIS":
+            if verbosity > 0:
+                print('[INFO] Run the VIS pypeit_setup')
+                print('[INFO] pypeit_setup -s vlt_xshooter_vis -r {}'
+                      '/VIS/ -b -c=all'.format(relraw_path))
+            os.chdir(cwd+'/reduced/{}/VIS/'.format(obj_name))
+            os.system('pypeit_setup -s vlt_xshooter_vis -r {}'
+                      '/VIS/ -b -c=all'.format(relraw_path))
 
-        if verbosity > 0:
-            print('[INFO] Run the NIR pypeit_setup')
-            print('[INFO] pypeit_setup -s vlt_xshooter_nir -r {}/NIR/ -b '
-                  '-c=all'.format(relraw_path))
-        os.chdir(cwd + '/reduced/{}/NIR/'.format(obj_name))
-        os.system('pypeit_setup -s vlt_xshooter_nir -r {}/NIR/ -b -c=all'.format(
-            relraw_path))
+        if arm is None or arm == "NIR":
+            if verbosity > 0:
+                print('[INFO] Run the NIR pypeit_setup')
+                print('[INFO] pypeit_setup -s vlt_xshooter_nir -r {}'
+                      '/NIR/ -b -c=all'.format(relraw_path))
+            os.chdir(cwd + '/reduced/{}/NIR/'.format(obj_name))
+            os.system('pypeit_setup -s vlt_xshooter_nir -r {}'
+                      '/NIR/ -b -c=all'.format(relraw_path))
 
     if mode is None or mode == 'clean':
         os.chdir(path)
         cwd = os.getcwd()
         # Run the pypeit table cleaning algorithm for VIS
-        if verbosity > 0:
-            print('[INFO] Preparing a clean pypeit input table for VIS')
-        vis_setup_path = cwd + '/reduced/{}/VIS/setup_files'.format(obj_name)
-        vis_raw_path = cwd + '/raw/{}/VIS/'.format(obj_name)
-        vis_sorted_files = glob.glob(vis_setup_path + '/vlt_xshooter_vis_*.sorted')
 
-
-        for vis_file in vis_sorted_files:
+        if arm is None or arm == 'VIS':
             if verbosity > 0:
-                print('[INFO] Cleaning {}'.format(vis_file))
-            vis_file_name = vis_file.split('.')[0]
-            df = read_sorted_file(vis_file)
-            df.to_csv('{}.csv'.format(vis_file_name))
-            cleaned_df, not_selected = clean_vis_table(df, vis_raw_path,
-                                                       delta_mjd=delta_mjd)
-            cleaned_df.to_csv('{}_cleaned.csv'.format(vis_file_name))
-            write_sorted_table(cleaned_df,'{}_suggested_table.txt'.format(vis_file_name))
-            write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(vis_file_name))
+                print('[INFO] Preparing a clean pypeit input table for VIS')
+            vis_setup_path = cwd + '/reduced/{}' \
+                                   '/VIS/setup_files'.format(obj_name)
+            vis_raw_path = cwd + '/raw/{}/VIS/'.format(obj_name)
+            vis_sorted_files = glob.glob(vis_setup_path +
+                                         '/vlt_xshooter_vis_*.sorted')
 
+            for vis_file in vis_sorted_files:
+                if verbosity > 0:
+                    print('[INFO] Cleaning {}'.format(vis_file))
+                vis_file_name = vis_file.split('.')[0]
+                df = read_sorted_file(vis_file)
+                df.to_csv('{}.csv'.format(vis_file_name))
+                cleaned_df, not_selected = clean_vis_table(df, vis_raw_path,
+                                                           delta_mjd=delta_mjd)
+                cleaned_df.to_csv('{}_cleaned.csv'.format(vis_file_name))
+                write_sorted_table(cleaned_df,'{}_suggested_table.txt'.format(vis_file_name))
+                write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(vis_file_name))
 
-        # Run the pypeit table cleaning algorithm for NIR
-        if verbosity > 0:
-            print('[INFO] Preparing a clean pypeit input table for NIR')
-        nir_setup_path = cwd+'/reduced/{}/NIR/setup_files'.format(obj_name)
-        nir_raw_path = cwd+'/raw/{}/NIR/'.format(obj_name)
-        nir_sorted_files = glob.glob(nir_setup_path+'/vlt_xshooter_nir_*.sorted')
-
-
-        for nir_file in nir_sorted_files:
+        if arm is None or arm == 'NIR':
+            # Run the pypeit table cleaning algorithm for NIR
             if verbosity > 0:
-                print('[INFO] Cleaning {}'.format(nir_file))
-            nir_file_name = nir_file.split('.')[0]
-            df = read_sorted_file(nir_file)
-            df.to_csv('{}.csv'.format(nir_file_name))
-            cleaned_df, not_selected = clean_nir_table(df, nir_raw_path,
-                                                       delta_mjd=delta_mjd)
-            cleaned_df.to_csv('{}_cleaned.csv'.format(nir_file_name))
-            write_sorted_table(cleaned_df, '{}_suggested_table.txt'.format(
-                                   nir_file_name))
-            write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(
-                nir_file_name))
+                print('[INFO] Preparing a clean pypeit input table for NIR')
+            nir_setup_path = cwd+'/reduced/{}/NIR/setup_files'.format(obj_name)
+            nir_raw_path = cwd+'/raw/{}/NIR/'.format(obj_name)
+            nir_sorted_files = glob.glob(nir_setup_path+
+                                         '/vlt_xshooter_nir_*.sorted')
+
+            for nir_file in nir_sorted_files:
+                if verbosity > 0:
+                    print('[INFO] Cleaning {}'.format(nir_file))
+                nir_file_name = nir_file.split('.')[0]
+                df = read_sorted_file(nir_file)
+                df.to_csv('{}.csv'.format(nir_file_name))
+                cleaned_df, not_selected = clean_nir_table(df, nir_raw_path,
+                                                           delta_mjd=delta_mjd)
+                cleaned_df.to_csv('{}_cleaned.csv'.format(nir_file_name))
+                write_sorted_table(cleaned_df, '{}_suggested_table.txt'.format(
+                                       nir_file_name))
+                write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(
+                    nir_file_name))
 
 
 

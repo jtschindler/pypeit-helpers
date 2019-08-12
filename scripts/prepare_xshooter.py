@@ -29,6 +29,11 @@ def parse_arguments():
                         help='Boolean to indicate whether the original files '
                              'should be removed.')
 
+    parser.add_argument('-a', '--arm', required=False, type=str,
+                        help='Specify the arm (NIR/VIS) to be prepared. This '
+                             'option allows you to choose only one of the two '
+                             'implemented arms.')
+
     parser.add_argument('-m', '--mode', required=False, type=str,
                         help='Set mode to "data"= data preparation only, '
                              '"setup" = run setup files only, or "clean" = '
@@ -76,9 +81,13 @@ if __name__ == '__main__':
         delta_mjd = args.deltamjd
     else:
         delta_mjd = 0.65
+    if args.arm is not None:
+        arm = args.arm
+    else:
+        arm = None
 
-    # check how to implement '.' path option, maybe as default
     sort_xshooter.prepare_xshooter_data(path, obj_name,
                                         remove_originals=remove,
                                         verbosity=verbosity,
-                                        mode=mode,  delta_mjd=delta_mjd)
+                                        mode=mode,  delta_mjd=delta_mjd,
+                                        arm=arm)
