@@ -34,7 +34,7 @@ def read_sorted_file(filename):
 
     df = read_sorted_table('temp.txt')
 
-    # os.remove('temp.txt')
+    os.remove('temp.txt')
     return df
 
 def read_sorted_table(filename):
