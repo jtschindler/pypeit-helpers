@@ -231,7 +231,6 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
         science_targets.loc[index, 'slit_offset_y'] = offset_y
 
 
-    # NEW
     num = 1
     # Resetting the comb_id and bkg_id values
     science_targets.loc[:, 'comb_id'] = None
@@ -268,16 +267,6 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
                 num += 1
 
 
-    # Renumber combination and background IDs
-    # num = 1
-    # for idx, index in enumerate(science_targets.index):
-    #     science_targets.loc[index,'comb_id'] = int(num)
-    #     if num % 2 == 0:
-    #         science_targets.loc[index, 'bkg_id'] = int(num - 1)
-    #     else:
-    #         science_targets.loc[index, 'bkg_id'] = int(num + 1)
-    #     science_targets.loc[index, 'calib'] = int(num)
-    #     num += 1
 
     # Change frametype to 'tilt, arc,science'
     for idx, index in enumerate(science_targets.index):
@@ -391,11 +380,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
 
                 num += 1
 
-
-
-
-
-    # Change first frametype of tellurics to standard
+    # Change frametype of tellurics to standard
     for index in tellurics.index:
         tellurics.loc[index, 'frametype'] = 'standard'
 
@@ -403,7 +388,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     # Pixelflats
     # -------------------------------------------------------
 
-    # Create empty tellurics DataFrame
+    # Create empty pixelflat DataFrame
     pixelflats = pd.DataFrame()
 
     for key in groups.indices.keys():
@@ -617,7 +602,7 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
     # Pixelflats
     # -------------------------------------------------------
 
-    # Create empty pixelflat DataFrame
+    # Create an empty pixelflats DataFrame
     pixelflats = pd.DataFrame()
 
     for key in groups.indices.keys():
@@ -661,33 +646,43 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
     # Arcs
     # -------------------------------------------------------
 
-    # # Create groups by binning and slit from the science_targets
-    groups = science_targets.groupby(['decker', 'binning'])
+    # Create a copy of science_targets to introduce the float slit variable for
+    # querying
+    sci = science_targets.copy()
+    for idx in sci.index:
+        sci.loc[idx,'slit'] = float(sci.loc[idx,'decker'][:3])
 
-    # Create empty tellurics DataFrame
+    groups = sci.groupby(['slit','binning'])
+
+    # Create empty arcs DataFrame
     arcs = pd.DataFrame()
+    # Create a copy of df to introduce the float slit variable for querying
+    dfcopy = df.query('(frametype=="arc,tilt" or frametype=="tilt,arc") and '
+                      'target=="LAMP,WAVE"').copy()
+
+    for idx in dfcopy.index:
+        dfcopy.loc[idx, 'slit'] = float(dfcopy.loc[idx, 'decker'][:3])
+
 
     for key in groups.indices.keys():
-        acs = df.query('(frametype=="arc,tilt" or frametype=="tilt,arc") and '
-                       'target=="LAMP,WAVE" and '
-                       'decker=="{}" and binning=="{}"'.format(key[0],
-                                                                  key[1])).copy()
+        arc_sel = dfcopy.query('slit <= {} and binning=="{}"'.format(key[0],
+                                                                      key[1])).copy()
+
         if key[1] == '2,2':
-            acs = acs.append(df.query('(frametype=="arc,tilt" or '
-                                      'frametype=="tilt,arc") and '
-                                      'target=="LAMP,WAVE" and '
-                       'decker=="{}" and binning=="{}"'.format(key[0],
-                                                                  '1,1')).copy())
+            arc_sel = arc_sel.append(dfcopy.query(
+                '(frametype=="arc,tilt" or '
+                'frametype=="tilt,arc") and '
+                'target=="LAMP,WAVE" and slit <= {} and '
+                'binning=="1,1"'.format(key[0])).copy())
 
         # Select science files with same decker and binning
-        sci = science_targets.copy()
         sci = sci.query(
-            'decker=="{}" and binning=="{}"'.format(key[0], key[1]))
+            'slit>={} and binning=="{}"'.format(key[0], key[1]))
 
-        # Loop through all pixelflats
-        for idx in acs.index:
-            mjd = acs.loc[idx, 'mjd']
-            # Select all science image calib values within +-0.5 mjd
+        # Loop through all arcs
+        for idx in arc_sel.index:
+            mjd = arc_sel.loc[idx, 'mjd']
+            # Select all science image calib values within delta mjd
             calib_ids = sci.query('{0:}-{1:} <= mjd <= {0:}+{1:}'.format(
                 mjd, delta_mjd)).calib.value_counts().index
             # Prepare a string with the calib values
@@ -697,9 +692,12 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
             # Remove trailing comma for calib string
             calib = calib[:-1]
             # Add calib string to pixelflat
-            acs.loc[idx, 'calib'] = calib
+            arc_sel.loc[idx, 'calib'] = calib
 
-        arcs = arcs.append(acs)
+        arcs = arcs.append(arc_sel)
+
+    arcs.drop(labels='slit', axis=1, inplace=True)
+
 
     # Create a dataframe with all not selected entries
     not_selected = df.query('selected==False').copy()
