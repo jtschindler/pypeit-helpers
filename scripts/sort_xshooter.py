@@ -5,10 +5,15 @@ import glob
 import numpy as np
 
 import shutil
+
+import datetime
+
 import pandas as pd
 from astropy.io import fits
 from astropy.io import ascii
 from astropy.table import Table
+
+from distutils.dir_util import copy_tree
 
 template_signature_to_delete = ['XSHOOTER_slt_acq',
                                 'XSHOOTER_slt_cal_NIRArcsMultiplePinhole',
@@ -813,10 +818,9 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
 
     if mode is None or mode == 'setup':
         # Run preliminary pypeit setups inside reduced folders
-        print(path)
         os.chdir(path)
         cwd = os.getcwd()
-        rawobj_path = cwd+'/raw/{}'.format(obj_name)
+        #rawobj_path = cwd+'/raw/{}'.format(obj_name)
         relraw_path = '../../../raw/{}'.format(obj_name)
 
         if arm is None or arm == "VIS":
@@ -842,7 +846,7 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
         # Run full pypeit setups inside reduced folders
         os.chdir(path)
         cwd = os.getcwd()
-        rawobj_path = cwd+'/raw/{}'.format(obj_name)
+        #rawobj_path = cwd+'/raw/{}'.format(obj_name)
         relraw_path = '../../../raw/{}'.format(obj_name)
 
         if arm is None or arm == "VIS":
@@ -851,6 +855,17 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                 print('[INFO] pypeit_setup -s vlt_xshooter_vis -r {}'
                       '/VIS/ -b -c=all'.format(relraw_path))
             os.chdir(cwd+'/reduced/{}/VIS/'.format(obj_name))
+            # backup directory if it already exists
+            if os.path.isdir(cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+                    obj_name)):
+                orig_dir = cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+                    obj_name)
+                now = datetime.datetime.now()
+                backup_dir = cwd+'/reduced/{' \
+                                 '0}/VIS/vlt_xshooter_vis_A_backup_{1}'.format(
+                    obj_name,now.strftime("%Y-%m-%d_%H-%M"))
+                copy_tree(orig_dir, backup_dir)
+                
             os.system('pypeit_setup -s vlt_xshooter_vis -r {}'
                       '/VIS/ -b -c=all'.format(relraw_path))
 
@@ -860,6 +875,17 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                 print('[INFO] pypeit_setup -s vlt_xshooter_nir -r {}'
                       '/NIR/ -b -c=all'.format(relraw_path))
             os.chdir(cwd + '/reduced/{}/NIR/'.format(obj_name))
+            # backup directory if it already exists
+            if os.path.isdir(cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+                    obj_name)):
+                orig_dir = cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+                    obj_name)
+                now = datetime.datetime.now()
+                backup_dir = cwd+'/reduced/{' \
+                                 '0}/VIS/vlt_xshooter_vis_A_backup_{1}'.format(
+                    obj_name,now.strftime("%Y-%m-%d_%H-%M"))
+                copy_tree(orig_dir, backup_dir)
+
             os.system('pypeit_setup -s vlt_xshooter_nir -r {}'
                       '/NIR/ -b -c=all'.format(relraw_path))
 
