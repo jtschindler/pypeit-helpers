@@ -876,13 +876,13 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                       '/NIR/ -b -c=all'.format(relraw_path))
             os.chdir(cwd + '/reduced/{}/NIR/'.format(obj_name))
             # backup directory if it already exists
-            if os.path.isdir(cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+            if os.path.isdir(cwd+'/reduced/{}/NIR/vlt_xshooter_nir_A'.format(
                     obj_name)):
-                orig_dir = cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+                orig_dir = cwd+'/reduced/{}/NIR/vlt_xshooter_nir_A'.format(
                     obj_name)
                 now = datetime.datetime.now()
                 backup_dir = cwd+'/reduced/{' \
-                                 '0}/VIS/vlt_xshooter_vis_A_backup_{1}'.format(
+                                 '0}/VIS/vlt_xshooter_nir_A_backup_{1}'.format(
                     obj_name,now.strftime("%Y-%m-%d_%H-%M"))
                 copy_tree(orig_dir, backup_dir)
 
