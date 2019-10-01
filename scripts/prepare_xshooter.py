@@ -29,6 +29,11 @@ def parse_arguments():
                         help='Boolean to indicate whether the original files '
                              'should be removed.')
 
+    parser.add_argument('-std', '--standard', required=False, type=bool,
+                        default=False,
+                        help='Boolean to indicate whether the flux standards '
+                             'will be included in the science files.')
+
     parser.add_argument('-a', '--arm', required=False, type=str,
                         help='Specify the arm (NIR/VIS) to be prepared. This '
                              'option allows you to choose only one of the two '
@@ -86,8 +91,10 @@ if __name__ == '__main__':
     else:
         arm = None
 
+
     sort_xshooter.prepare_xshooter_data(path, obj_name,
                                         remove_originals=remove,
                                         verbosity=verbosity,
                                         mode=mode,  delta_mjd=delta_mjd,
-                                        arm=arm)
+                                        arm=arm,
+                                        std=args.standard)

@@ -73,6 +73,7 @@ def make_image_df_xshooter(datapath, save=False, save_name=None, verbosity=0):
     date_list = []
     mjd_list = []
     exptime_list = []
+    # filter_list = []
     ra_list = []
     dec_list = []
     tpl_id_list = []
@@ -115,7 +116,8 @@ def make_image_df_xshooter(datapath, save=False, save_name=None, verbosity=0):
         dpr_tech_list.append(hdr['HIERARCH ESO DPR TECH']) #  Observation
         # technique
         dpr_type_list.append(hdr['HIERARCH ESO DPR TYPE']) # Observation type
-
+        # filter_list.append(hdr['HIERARCH ESO INS FILT1 NAME']) # Filter for
+        # observation
         # binx_list.append(hdr['HIERARCH ESO DET WIN1 BINX'])  #Binning factor
         # along X
         # biny_list.append(hdr['HIERARCH ESO DET WIN1 BINY']) #B inning factor
@@ -174,12 +176,12 @@ def make_image_df_xshooter(datapath, save=False, save_name=None, verbosity=0):
     if save and len(df) > 0:
         if save_name is not None:
             df.to_csv(datapath+save_name+'.csv', index=False)
-            if verbosity >0:
+            if verbosity > 0:
                 print('[INFO] Save header information to csv file: {}'.format(
                     datapath+save_name+'.csv'))
         else:
             df.to_csv(datapath+'fitslist.csv', index=False)
-            if verbosity >0:
+            if verbosity > 0:
                 print('[INFO] Save header information to csv file: {}'.format(
                     datapath+'fitslist.csv'))
 
@@ -187,7 +189,7 @@ def make_image_df_xshooter(datapath, save=False, save_name=None, verbosity=0):
 
 
 
-def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
+def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
 
 
     # Change the airmass to a numeric value to sort on
@@ -199,12 +201,6 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     # Select science images
     science_targets = df.query('frametype=="science" and target!="STD,'
                                'TELLURIC" and target !="STD,SKY"').copy()
-
-
-    # TAKE CARE of flux standards
-    # Add flux standards to science list
-    # flux_standards = df.query('frametype=="standard" and target=="STD,FLUX"')
-    # science_targets = science_targets.append(flux_standards)
 
     # Mark the selected science frames
     sel_idx = science_targets.index
@@ -253,7 +249,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
                 offset_diff = abs(science_targets.loc[index, 'slit_offset_y'] -
                                   science_targets.loc[index+1, 'slit_offset_y'])
 
-                if name == next_name and offset_diff >3:
+                if name == next_name and offset_diff > 3:
                     science_targets.loc[index, 'comb_id'] = int(num)
                     science_targets.loc[index+1, 'comb_id'] = int(num+1)
                     science_targets.loc[index, 'bkg_id'] = int(num+1)
@@ -271,17 +267,108 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
 
                 num += 1
 
-
-
+    calib = 0
     # Change frametype to 'tilt, arc,science'
     for idx, index in enumerate(science_targets.index):
-        science_targets.loc[idx, 'calib'] = idx
+        science_targets.loc[idx, 'calib'] = calib
         science_targets.loc[index, 'frametype'] = 'tilt,arc,science'
+        calib += 1
 
-    # TODO
-    # Change frametype for flux standards to 'science'
-    # Link flux standards with science observations
-    # rename flux standard target column
+
+    # -------------------------------------------------------
+    # Flux standards
+    # -------------------------------------------------------
+
+    if std:
+        flux_standards = df.query('(frametype=="standard" or '
+                                   'frametype=="science") and '
+                                   'target=="STD,FLUX"').copy()
+
+        # Mark the selected flux standard frames
+        sel_idx = flux_standards.index
+        df.loc[sel_idx, 'selected'] = True
+
+        # Sort science targets by mjd
+        flux_standards.sort_values('mjd', inplace=True)
+        flux_standards.reset_index(drop=True, inplace=True)
+
+        # For the flux standards check the offsets along the slit
+        for index in flux_standards.index:
+            filename = data_dir + flux_standards.loc[index, 'filename']
+            hdr = fits.open(filename)[0].header
+            offset_x_name = 'HIERARCH ESO SEQ CUMOFF X'
+            if offset_x_name in hdr:
+                offset_x = hdr[offset_x_name]
+            else:
+                offset_x = 0
+            offset_y_name = 'HIERARCH ESO SEQ CUMOFF Y'
+            if offset_y_name in hdr:
+                offset_y = hdr[offset_y_name]
+            else:
+                offset_x = 0
+            flux_standards.loc[index, 'slit_offset_x'] = offset_x
+            flux_standards.loc[index, 'slit_offset_y'] = offset_y
+
+            # Change target name
+            name = hdr['HIERARCH ESO OBS TARG NAME']
+            flux_standards.loc[index, 'target'] = name + '_flux'
+
+        # Resetting the comb_id and bkg_id values
+        flux_standards.loc[:, 'comb_id'] = None
+        flux_standards.loc[:, 'bkg_id'] = None
+
+        flux_standards.to_csv('test_flux_standards_nir.csv', index=True)
+
+        for index in flux_standards.index:
+            combid = flux_standards.loc[index, 'comb_id']
+            bkgid = flux_standards.loc[index, 'bkg_id']
+
+            # Only populate comb_id and bkg_id, if they are empty
+            if combid is None and bkgid is None:
+                if index + 1 in flux_standards.index:
+                    # Check if next telluric frame matches AB pattern
+                    name = flux_standards.loc[index, 'target']
+                    next_name = flux_standards.loc[index + 1, 'target']
+                    offset_diff = abs(
+                        flux_standards.loc[index, 'slit_offset_y'] -
+                        flux_standards.loc[index + 1, 'slit_offset_y'])
+
+                    if name == next_name and offset_diff > 3:
+                        flux_standards.loc[index, 'comb_id'] = int(num)
+                        flux_standards.loc[index + 1, 'comb_id'] = int(num + 1)
+                        flux_standards.loc[index, 'bkg_id'] = int(num + 1)
+                        flux_standards.loc[index + 1, 'bkg_id'] = int(num)
+                        num += 2
+
+                    else:
+                        flux_standards.loc[index, 'comb_id'] = int(num)
+                        flux_standards.loc[index, 'bkg_id'] = -1
+
+                        num += 1
+                else:
+                    flux_standards.loc[index, 'comb_id'] = int(num)
+                    flux_standards.loc[index, 'bkg_id'] = -1
+
+                    num += 1
+
+        # Change frametype to 'standard'
+        for idx, index in enumerate(flux_standards.index):
+            flux_standards.loc[idx, 'calib'] = calib
+            flux_standards.loc[index, 'frametype'] = 'standard'
+            calib += 1
+
+
+
+        flux_standards.to_csv('test_flux_standards_nir.csv', index=True)
+
+
+        if science_targets.shape[0] > 0 and flux_standards.shape[0] > 0:
+            science_targets = science_targets.append(flux_standards,
+                                                     sort=False,
+                                                     ignore_index=True)
+        elif flux_standards.shape[0] > 0:
+            science_targets = flux_standards.copy()
+
 
     # -------------------------------------------------------
     # Tellurics
@@ -339,7 +426,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
             ydx = np.argmin(np.array(sci['mjd_diff']))
             tell.loc[idx, 'calib'] = sci.loc[sci.index[ydx], 'calib']
 
-        tellurics = tellurics.append(tell)
+        tellurics = tellurics.append(tell, sort=False)
 
     # Renumber combination and background IDs for the tellurics
     # The routine checks for AB pairs and treats single exposures correctly.
@@ -352,8 +439,6 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     tellurics.sort_values('mjd', inplace=True)
     tellurics.reset_index(drop=True, inplace=True)
 
-    print(tellurics.columns)
-    print(tellurics)
 
     for index in tellurics.index:
         combid = tellurics.loc[index, 'comb_id']
@@ -468,7 +553,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     return pypeit_input, not_selected
 
 
-def clean_vis_table(df, data_dir, delta_mjd=0.65):
+def clean_vis_table(df, data_dir, delta_mjd=0.65, std=False):
 
     # Change the airmass to a numeric value to sort on
     df.airmass = pd.to_numeric(df.airmass, errors='coerce')
@@ -476,17 +561,11 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
     # Create a column to indicate which frames were selected
     df.loc[:, 'selected'] = False
 
-    # Select science images
+
+    # Select science images (including flux standards if selected)
     science_targets = df.query('frametype=="science" and target!="STD,'
                                'TELLURIC" and target !="STD,SKY"').copy()
 
-
-    print(science_targets)
-
-    # TAKE CARE of flux standards
-    # Add flux standards to science list
-    # flux_standards = df.query('frametype=="standard" and target=="STD,FLUX"')
-    # science_targets = science_targets.append(flux_standards)
 
     # Mark the selected science frames
     sel_idx = science_targets.index
@@ -501,18 +580,78 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
 
     # Modify, comb_id, bkg_id, calib and frametype
     num = 1
+    calib = 0
     for idx, index in enumerate(science_targets.index):
         science_targets.loc[index, 'comb_id'] = int(num)
         science_targets.loc[index, 'bkg_id'] = -1
-        science_targets.loc[idx, 'calib'] = idx
+        science_targets.loc[idx, 'calib'] = calib
         science_targets.loc[index, 'frametype'] = 'science'
         num += 1
+        calib += 1
 
 
-    # TODO
-    # Change frametype for flux standards to 'science'
-    # Link flux standards with science observations
-    # rename flux standard target column
+    # -------------------------------------------------------
+    # Flux standards
+    # -------------------------------------------------------
+
+    if std:
+        flux_standards = df.query('(frametype=="standard" or '
+                                   'frametype=="science") and '
+                                   'target=="STD,FLUX"').copy()
+
+        # Mark the selected flux standard frames
+        sel_idx = flux_standards.index
+        df.loc[sel_idx, 'selected'] = True
+
+        # Sort science targets by mjd
+        flux_standards.sort_values('mjd', inplace=True)
+        flux_standards.reset_index(drop=True, inplace=True)
+
+        # For the flux standards check the offsets along the slit
+        for index in flux_standards.index:
+            filename = data_dir + flux_standards.loc[index, 'filename']
+            hdr = fits.open(filename)[0].header
+            # offset_x_name = 'HIERARCH ESO SEQ CUMOFF X'
+            # if offset_x_name in hdr:
+            #     offset_x = hdr[offset_x_name]
+            # else:
+            #     offset_x = 0
+            # offset_y_name = 'HIERARCH ESO SEQ CUMOFF Y'
+            # if offset_y_name in hdr:
+            #     offset_y = hdr[offset_y_name]
+            # else:
+            #     offset_x = 0
+            # flux_standards.loc[index, 'slit_offset_x'] = offset_x
+            # flux_standards.loc[index, 'slit_offset_y'] = offset_y
+
+            # Change target name
+            name = hdr['HIERARCH ESO OBS TARG NAME']
+            flux_standards.loc[index, 'target'] = name + '_flux'
+
+        # Resetting the comb_id and bkg_id values
+        flux_standards.loc[:, 'comb_id'] = None
+        flux_standards.loc[:, 'bkg_id'] = None
+
+        for idx, index in enumerate(flux_standards.index):
+            flux_standards.loc[index, 'comb_id'] = int(num)
+            flux_standards.loc[index, 'bkg_id'] = -1
+            flux_standards.loc[idx, 'calib'] = calib
+            flux_standards.loc[index, 'frametype'] = 'standard'
+            num += 1
+            calib += 1
+
+
+
+
+        flux_standards.to_csv('test_flux_standards_nir.csv', index=True)
+
+
+        if science_targets.shape[0] > 0 and flux_standards.shape[0] > 0:
+            science_targets = science_targets.append(flux_standards,
+                                                     sort=False,
+                                                     ignore_index=True)
+        elif flux_standards.shape[0] > 0:
+            science_targets = flux_standards.copy()
 
 
     # -------------------------------------------------------
@@ -549,7 +688,7 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
             ydx = np.argmin(np.array(sci['mjd_diff']))
             tell.loc[idx, 'calib'] = sci.loc[sci.index[ydx], 'calib']
 
-        tellurics = tellurics.append(tell)
+        tellurics = tellurics.append(tell, sort=False)
 
     # Renumber combination and background IDs for the tellurics
     for index in tellurics.index:
@@ -655,9 +794,9 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
     # querying
     sci = science_targets.copy()
     for idx in sci.index:
-        sci.loc[idx,'slit'] = float(sci.loc[idx,'decker'][:3])
+        sci.loc[idx, 'slit'] = float(sci.loc[idx, 'decker'][:3])
 
-    groups = sci.groupby(['slit','binning'])
+    groups = sci.groupby(['slit', 'binning'])
 
     # Create empty arcs DataFrame
     arcs = pd.DataFrame()
@@ -724,7 +863,8 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65):
 
 
 def prepare_xshooter_data(path, obj_name, remove_originals=False,
-                          verbosity=0, mode=None, delta_mjd=0.65, arm=None):
+                          verbosity=0, mode=None, delta_mjd=0.65, arm=None,
+                          std=False):
 
     if mode is None or mode == 'data':
 
@@ -882,7 +1022,7 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                     obj_name)
                 now = datetime.datetime.now()
                 backup_dir = cwd+'/reduced/{' \
-                                 '0}/VIS/vlt_xshooter_nir_A_backup_{1}'.format(
+                                 '0}/NIR/vlt_xshooter_nir_A_backup_{1}'.format(
                     obj_name,now.strftime("%Y-%m-%d_%H-%M"))
                 copy_tree(orig_dir, backup_dir)
 
@@ -910,10 +1050,12 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                 df = read_sorted_file(vis_file)
                 df.to_csv('{}.csv'.format(vis_file_name))
                 cleaned_df, not_selected = clean_vis_table(df, vis_raw_path,
-                                                           delta_mjd=delta_mjd)
+                                                           delta_mjd=delta_mjd,
+                                                           std=std)
                 cleaned_df.to_csv('{}_cleaned.csv'.format(vis_file_name))
                 write_sorted_table(cleaned_df,'{}_suggested_table.txt'.format(vis_file_name))
-                write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(vis_file_name))
+                if not_selected.shape[0] > 0:
+                    write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(vis_file_name))
 
         if arm is None or arm == 'NIR':
             # Run the pypeit table cleaning algorithm for NIR
@@ -931,12 +1073,14 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                 df = read_sorted_file(nir_file)
                 df.to_csv('{}.csv'.format(nir_file_name))
                 cleaned_df, not_selected = clean_nir_table(df, nir_raw_path,
-                                                           delta_mjd=delta_mjd)
+                                                           delta_mjd=delta_mjd,
+                                                           std=std)
                 cleaned_df.to_csv('{}_cleaned.csv'.format(nir_file_name))
                 write_sorted_table(cleaned_df, '{}_suggested_table.txt'.format(
                                        nir_file_name))
-                write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(
-                    nir_file_name))
+                if not_selected.shape[0] > 0:
+                    write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(
+                                        nir_file_name))
 
 
 
