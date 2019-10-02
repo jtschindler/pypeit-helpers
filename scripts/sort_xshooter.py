@@ -485,6 +485,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
             tellurics.loc[index, 'frametype'] = 'standard'
     else:
         tellurics = None
+        print('[INFO] No telluric stars found!')
 
     # -------------------------------------------------------
     # Pixelflats
@@ -501,11 +502,14 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
                                                                 key[1])).copy()
 
         if bias:
-            # The frametrype of every second pixelflat will be set to bias,
-            # as only half of the pixelflats are actually illuminated.
-            pflats.loc[pflats[1::2].index,'frametype'] = 'bias'
-            # pflats = pflats[::2].copy()
-            # biases = pflats[1::2].copy()
+
+            for index in pflats.index:
+                filename = data_dir + pflats.loc[index, 'filename']
+                hdr = fits.open(filename)[0].header
+                obs_technique = hdr['HIERARCH ESO DPR TECH']
+
+                if obs_technique == 'IMAGE':
+                    pflats.loc[index, 'frametype'] = 'bias'
 
 
         # Select the pixelflats with the highest exposure time
@@ -525,7 +529,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
 
         # Loop through all pixelflats
         for idx in pflats.index:
-            mjd = pflats.loc[idx,'mjd']
+            mjd = pflats.loc[idx, 'mjd']
             # Select all science image calib values within +-0.5 mjd
             calib_ids = sci.query('{0:}-{1:} <= mjd <= {0:}+{1:}'.format(
                 mjd, delta_mjd)).calib.value_counts().index
