@@ -391,93 +391,100 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
                         'decker=="{}" and binning=="{}"'.format(key[0],
                                                             key[1])).copy()
 
-        # For the science targets read the offsets along the slit and
-        # rename telluric target name according to header keyword
-        for index in tell.index:
-            filename = data_dir + tell.loc[index, 'filename']
-            hdr = fits.open(filename)[0].header
-            offset_x_name = 'HIERARCH ESO SEQ CUMOFF X'
-            if offset_x_name in hdr:
-                offset_x = hdr[offset_x_name]
-            else:
-                offset_x = 0
-            offset_y_name = 'HIERARCH ESO SEQ CUMOFF Y'
-            if offset_y_name in hdr:
-                offset_y = hdr[offset_y_name]
-            else:
-                offset_y = 0
-            tell.loc[index, 'slit_offset_x'] = offset_x
-            tell.loc[index, 'slit_offset_y'] = offset_y
-            target_name = hdr['HIERARCH ESO OBS TARG NAME']
-            tell.loc[index, 'target'] = target_name + '_tell'
+        if tell.shape[0] > 0:
+
+            # For the science targets read the offsets along the slit and
+            # rename telluric target name according to header keyword
+            for index in tell.index:
+                filename = data_dir + tell.loc[index, 'filename']
+                hdr = fits.open(filename)[0].header
+                offset_x_name = 'HIERARCH ESO SEQ CUMOFF X'
+                if offset_x_name in hdr:
+                    offset_x = hdr[offset_x_name]
+                else:
+                    offset_x = 0
+                offset_y_name = 'HIERARCH ESO SEQ CUMOFF Y'
+                if offset_y_name in hdr:
+                    offset_y = hdr[offset_y_name]
+                else:
+                    offset_y = 0
+                tell.loc[index, 'slit_offset_x'] = offset_x
+                tell.loc[index, 'slit_offset_y'] = offset_y
+                target_name = hdr['HIERARCH ESO OBS TARG NAME']
+                tell.loc[index, 'target'] = target_name + '_tell'
 
 
-        # Mark the selected tellurics frames
-        sel_idx = tell.index
-        df.loc[sel_idx, 'selected'] = True
+            # Mark the selected tellurics frames
+            sel_idx = tell.index
+            df.loc[sel_idx, 'selected'] = True
 
-        # Set the calib values to the closest science image with same
-        # decker and binning
-        for idx in tell.index:
-            sci = science_targets.copy()
-            sci = sci.query('decker=="{}" and binning=="{}"'.format(key[0],
-                                                                    key[
-                                                                        1])).copy()
+            # Set the calib values to the closest science image with same
+            # decker and binning
+            for idx in tell.index:
+                sci = science_targets.copy()
+                sci = sci.query('decker=="{}" and binning=="{}"'.format(key[0],
+                                                                        key[
+                                                                            1])).copy()
 
-            # find the closest science target in mjd
-            tell_mjd = float(tell.loc[idx, 'mjd'])
-            sci.loc[:, 'mjd'] = pd.to_numeric(sci.loc[:, 'mjd'])
-            sci.loc[:, 'mjd_diff'] = abs(sci.loc[:, 'mjd'] - tell_mjd)
-            ydx = np.argmin(np.array(sci['mjd_diff']))
-            tell.loc[idx, 'calib'] = sci.loc[sci.index[ydx], 'calib']
+                # find the closest science target in mjd
+                tell_mjd = float(tell.loc[idx, 'mjd'])
+                sci.loc[:, 'mjd'] = pd.to_numeric(sci.loc[:, 'mjd'])
+                sci.loc[:, 'mjd_diff'] = abs(sci.loc[:, 'mjd'] - tell_mjd)
+                ydx = np.argmin(np.array(sci['mjd_diff']))
+                tell.loc[idx, 'calib'] = sci.loc[sci.index[ydx], 'calib']
 
-        tellurics = tellurics.append(tell, sort=False)
-
-    # Renumber combination and background IDs for the tellurics
-    # The routine checks for AB pairs and treats single exposures correctly.
-
-    # Resetting the comb_id and bkg_id values
-    tellurics.loc[:, 'comb_id'] = None
-    tellurics.loc[:, 'bkg_id'] = None
-    # Sort tellurics by mjd and reset index
-    # The assumption is that AB patterns will be consecutive in MJD
-    tellurics.sort_values('mjd', inplace=True)
-    tellurics.reset_index(drop=True, inplace=True)
+            tellurics = tellurics.append(tell, sort=False)
 
 
-    for index in tellurics.index:
-        combid = tellurics.loc[index, 'comb_id']
-        bkgid = tellurics.loc[index, 'bkg_id']
-        # Only populate comb_id and bkg_id, if they are empty
-        if combid is None and bkgid is None:
-            if index+1 in tellurics.index:
-                # Check if next telluric frame matches AB pattern
-                name = tellurics.loc[index, 'target']
-                next_name = tellurics.loc[index+1, 'target']
-                offset_diff = abs(tellurics.loc[index, 'slit_offset_y'] -
-                                  tellurics.loc[index+1, 'slit_offset_y'])
+    if tellurics.shape[0] > 0:
+        # Renumber combination and background IDs for the tellurics
+        # The routine checks for AB pairs and treats single exposures correctly.
 
-                if name == next_name and offset_diff >3:
-                    tellurics.loc[index, 'comb_id'] = int(num)
-                    tellurics.loc[index+1, 'comb_id'] = int(num+1)
-                    tellurics.loc[index, 'bkg_id'] = int(num+1)
-                    tellurics.loc[index + 1, 'bkg_id'] = int(num)
-                    num += 2
+        # Resetting the comb_id and bkg_id values
+        tellurics.loc[:, 'comb_id'] = None
+        tellurics.loc[:, 'bkg_id'] = None
+        # Sort tellurics by mjd and reset index
+        # The assumption is that AB patterns will be consecutive in MJD
+        tellurics.sort_values('mjd', inplace=True)
+        tellurics.reset_index(drop=True, inplace=True)
 
+
+
+        for index in tellurics.index:
+            combid = tellurics.loc[index, 'comb_id']
+            bkgid = tellurics.loc[index, 'bkg_id']
+            # Only populate comb_id and bkg_id, if they are empty
+            if combid is None and bkgid is None:
+                if index+1 in tellurics.index:
+                    # Check if next telluric frame matches AB pattern
+                    name = tellurics.loc[index, 'target']
+                    next_name = tellurics.loc[index+1, 'target']
+                    offset_diff = abs(tellurics.loc[index, 'slit_offset_y'] -
+                                      tellurics.loc[index+1, 'slit_offset_y'])
+
+                    if name == next_name and offset_diff >3:
+                        tellurics.loc[index, 'comb_id'] = int(num)
+                        tellurics.loc[index+1, 'comb_id'] = int(num+1)
+                        tellurics.loc[index, 'bkg_id'] = int(num+1)
+                        tellurics.loc[index + 1, 'bkg_id'] = int(num)
+                        num += 2
+
+                    else:
+                        tellurics.loc[index, 'comb_id'] = int(num)
+                        tellurics.loc[index, 'bkg_id'] = -1
+
+                        num += 1
                 else:
                     tellurics.loc[index, 'comb_id'] = int(num)
                     tellurics.loc[index, 'bkg_id'] = -1
 
                     num += 1
-            else:
-                tellurics.loc[index, 'comb_id'] = int(num)
-                tellurics.loc[index, 'bkg_id'] = -1
 
-                num += 1
-
-    # Change frametype of tellurics to standard
-    for index in tellurics.index:
-        tellurics.loc[index, 'frametype'] = 'standard'
+        # Change frametype of tellurics to standard
+        for index in tellurics.index:
+            tellurics.loc[index, 'frametype'] = 'standard'
+    else:
+        tellurics = None
 
     # -------------------------------------------------------
     # Pixelflats
@@ -540,14 +547,16 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
 
 
     # Consolidate all selected frames in one DataFrame
-    tellurics.drop(labels='slit_offset_x', axis=1, inplace=True)
-    tellurics.drop(labels='slit_offset_y', axis=1, inplace=True)
+    if tellurics is not None:
+        tellurics.drop(labels='slit_offset_x', axis=1, inplace=True)
+        tellurics.drop(labels='slit_offset_y', axis=1, inplace=True)
     science_targets.drop(labels='slit_offset_x', axis=1, inplace=True)
     science_targets.drop(labels='slit_offset_y', axis=1, inplace=True)
 
     pypeit_input = pd.DataFrame()
     pypeit_input = pypeit_input.append(science_targets)
-    pypeit_input = pypeit_input.append(tellurics)
+    if tellurics is not None:
+        pypeit_input = pypeit_input.append(tellurics)
     pypeit_input = pypeit_input.append(pixelflats)
     pypeit_input.drop(labels='selected', axis=1, inplace=True)
 
