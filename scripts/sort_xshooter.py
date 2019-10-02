@@ -22,7 +22,12 @@ template_signature_to_delete = ['XSHOOTER_slt_acq',
                                 'XSHOOTER_slt_cal_UVBVisArcsMultiplePinhole',
                                 'XSHOOTER_slt_cal_NIRLampFlatSinglePinhole',
                                 'XSHOOTER_slt_cal_NIRArcsSinglePinhole',
-                                'XSHOOTER_slt_cal_NIRLampFlatSinglePinhole']
+                                'XSHOOTER_slt_cal_NIRLampFlatSinglePinhole',
+                                'SHOOT_slt_cal_UVBVisArcsSinglePinhole',
+                                'SHOOT_slt_cal_VISLampFlatSinglePinhole',
+                                'SHOOT_slt_cal_UVBVisArcsMultiplePinhole',
+                                'SHOOT_slt_acq',
+                                'SHOOT_slt_cal_NIRArcsMultiplePinhole']
 
 obj_name_to_delete = ['LAMP,FMTCHK', 'LAMP,ORDERDEF', 'LAMP,AFC']
 
@@ -793,55 +798,59 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65, std=False):
     # Create a copy of science_targets to introduce the float slit variable for
     # querying
     sci = science_targets.copy()
+
     for idx in sci.index:
         sci.loc[idx, 'slit'] = float(sci.loc[idx, 'decker'][:3])
 
     groups = sci.groupby(['slit', 'binning'])
 
-    # Create empty arcs DataFrame
-    arcs = pd.DataFrame()
     # Create a copy of df to introduce the float slit variable for querying
     dfcopy = df.query('(frametype=="arc,tilt" or frametype=="tilt,arc") and '
                       'target=="LAMP,WAVE"').copy()
 
-    for idx in dfcopy.index:
-        dfcopy.loc[idx, 'slit'] = float(dfcopy.loc[idx, 'decker'][:3])
+    if dfcopy.shape[0] > 0:
+        # Create empty arcs DataFrame
+        arcs = pd.DataFrame()
+        for idx in dfcopy.index:
+            dfcopy.loc[idx, 'slit'] = float(dfcopy.loc[idx, 'decker'][:3])
 
 
-    for key in groups.indices.keys():
-        arc_sel = dfcopy.query('slit <= {} and binning=="{}"'.format(key[0],
-                                                                      key[1])).copy()
+        for key in groups.indices.keys():
+            arc_sel = dfcopy.query('slit <= {} and binning=="{}"'.format(key[0],
+                                                                          key[1])).copy()
 
-        if key[1] == '2,2':
-            arc_sel = arc_sel.append(dfcopy.query(
-                '(frametype=="arc,tilt" or '
-                'frametype=="tilt,arc") and '
-                'target=="LAMP,WAVE" and slit <= {} and '
-                'binning=="1,1"'.format(key[0])).copy())
+            if key[1] == '2,2':
+                arc_sel = arc_sel.append(dfcopy.query(
+                    '(frametype=="arc,tilt" or '
+                    'frametype=="tilt,arc") and '
+                    'target=="LAMP,WAVE" and slit <= {} and '
+                    'binning=="1,1"'.format(key[0])).copy())
 
-        # Select science files with same decker and binning
-        sci = sci.query(
-            'slit>={} and binning=="{}"'.format(key[0], key[1]))
+            # Select science files with same decker and binning
+            sci = sci.query(
+                'slit>={} and binning=="{}"'.format(key[0], key[1]))
 
-        # Loop through all arcs
-        for idx in arc_sel.index:
-            mjd = arc_sel.loc[idx, 'mjd']
-            # Select all science image calib values within delta mjd
-            calib_ids = sci.query('{0:}-{1:} <= mjd <= {0:}+{1:}'.format(
-                mjd, delta_mjd)).calib.value_counts().index
-            # Prepare a string with the calib values
-            calib = ''
-            for cal in calib_ids:
-                calib += str(cal) + ','
-            # Remove trailing comma for calib string
-            calib = calib[:-1]
-            # Add calib string to pixelflat
-            arc_sel.loc[idx, 'calib'] = calib
+            # Loop through all arcs
+            for idx in arc_sel.index:
+                mjd = arc_sel.loc[idx, 'mjd']
+                # Select all science image calib values within delta mjd
+                calib_ids = sci.query('{0:}-{1:} <= mjd <= {0:}+{1:}'.format(
+                    mjd, delta_mjd)).calib.value_counts().index
+                # Prepare a string with the calib values
+                calib = ''
+                for cal in calib_ids:
+                    calib += str(cal) + ','
+                # Remove trailing comma for calib string
+                calib = calib[:-1]
+                # Add calib string to pixelflat
+                arc_sel.loc[idx, 'calib'] = calib
 
-        arcs = arcs.append(arc_sel)
+            arcs = arcs.append(arc_sel)
 
-    arcs.drop(labels='slit', axis=1, inplace=True)
-
+        arcs.drop(labels='slit', axis=1, inplace=True)
+    else:
+        print('[INFO] No arcs found!')
+        arcs = None
 
     # Create a dataframe with all not selected entries
     not_selected = df.query('selected==False').copy()
@@ -853,7 +862,8 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65, std=False):
     pypeit_input = pypeit_input.append(tellurics)
     pypeit_input = pypeit_input.append(pixelflats)
     pypeit_input = pypeit_input.append(biases)
-    pypeit_input = pypeit_input.append(arcs)
+    if arcs is not None:
+        pypeit_input = pypeit_input.append(arcs)
     pypeit_input.drop(labels='selected', axis=1, inplace=True)
 
     pypeit_input.sort_values('mjd', inplace=True)
