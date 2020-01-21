@@ -1072,6 +1072,7 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                 vis_file_name = vis_file.split('.')[0]
                 df = read_sorted_file(vis_file)
                 df.to_csv('{}.csv'.format(vis_file_name))
+                print(vis_file_name)
                 cleaned_df, not_selected = clean_vis_table(df, vis_raw_path,
                                                            delta_mjd=delta_mjd,
                                                            std=std)
