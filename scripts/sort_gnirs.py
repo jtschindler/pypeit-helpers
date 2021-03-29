@@ -28,8 +28,8 @@ template_signature_to_delete = ['XSHOOTER_slt_acq',
 
 obj_name_to_delete = ['LAMP,FMTCHK', 'LAMP,ORDERDEF', 'LAMP,AFC']
 
-def read_sorted_file(filename):
 
+def read_sorted_file(filename):
     with open(filename) as f:
         content = f.readlines()
 
@@ -44,21 +44,25 @@ def read_sorted_file(filename):
     os.remove('temp.txt')
     return df
 
-def read_sorted_table(filename):
 
+def read_sorted_table(filename):
     table = ascii.read(filename, delimiter='|', format='fixed_width')
     df = table.to_pandas()
 
     return df
 
-def write_sorted_table(df, filename):
+
+def write_sorted_table(df, filename, sortby='mjd'):
+    df.sort_values(by=[sortby], inplace=True)
 
     table = Table.from_pandas(df)
 
     ascii.write(table, filename, delimiter='|', format='fixed_width',
                 overwrite=True)
 
-def make_image_df_gnirs(datapath, save=False, save_name=None, verbosity=0):
+
+def make_image_df_gnirs(datapath, save=False, save_name=None, verbosity=0,
+                        sortby='mjd'):
     """
 
     :param datapath:
@@ -81,7 +85,6 @@ def make_image_df_gnirs(datapath, save=False, save_name=None, verbosity=0):
     filter1_list = []
     filter2_list = []
 
-
     fits_list = glob.glob('{}/*.fits'.format(datapath))
 
     for file in fits_list:
@@ -93,9 +96,9 @@ def make_image_df_gnirs(datapath, save=False, save_name=None, verbosity=0):
         hdr = hdu[0].header
 
         filename_list.append(file)
-        obsid_list.append(hdr['OBSID']) # Observation ID
-        objname_list.append(hdr['OBJECT']) # Original target
-        programid_list.append(hdr['GEMPRGID']) # Gemini program ID
+        obsid_list.append(hdr['OBSID'])  # Observation ID
+        objname_list.append(hdr['OBJECT'])  # Original target
+        programid_list.append(hdr['GEMPRGID'])  # Gemini program ID
         instrument_list.append(hdr['INSTRUME'])
         date_list.append(hdr['DATE-OBS'])
         mjd_list.append(hdr['MJD_OBS'])
@@ -106,8 +109,6 @@ def make_image_df_gnirs(datapath, save=False, save_name=None, verbosity=0):
         grating_list.append(hdr['GRATING'])  # Grating
         filter1_list.append(hdr['FILTER1'])  # Filter 1
         filter2_list.append(hdr['FILTER2'])  # Filter 2
-
-
 
     columns = ['filename', 'obs_name', 'obj_name', 'program_id',
                'instrument', 'date', 'mjd', 'exp_time',
@@ -121,27 +122,24 @@ def make_image_df_gnirs(datapath, save=False, save_name=None, verbosity=0):
 
     df = pd.DataFrame(data, columns=columns)
 
-    df = df.sort_values('mjd')
+    df = df.sort_values(by=[sortby])
 
     if save and len(df) > 0:
         if save_name is not None:
-            df.to_csv(datapath+save_name+'.csv', index=False)
-            if verbosity >0:
+            df.to_csv(datapath + save_name + '.csv', index=False)
+            if verbosity > 0:
                 print('[INFO] Save header information to csv file: {}'.format(
-                    datapath+save_name+'.csv'))
+                    datapath + save_name + '.csv'))
         else:
-            df.to_csv(datapath+'fitslist.csv', index=False)
-            if verbosity >0:
+            df.to_csv(datapath + 'fitslist.csv', index=False)
+            if verbosity > 0:
                 print('[INFO] Save header information to csv file: {}'.format(
-                    datapath+'fitslist.csv'))
+                    datapath + 'fitslist.csv'))
 
     return df
 
 
-
-def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
-
-
+def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, sortby='mjd'):
     # Change the airmass to a numeric value to sort on
     df.airmass = pd.to_numeric(df.airmass, errors='coerce')
 
@@ -149,8 +147,8 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     df.loc[:, 'selected'] = False
 
     # Select science images
-    science_targets = df.query('frametype=="science"').copy()
-
+    science_targets = df.query('frametype=="science" or '
+                               'frametype=="arc,science,tilt"').copy()
 
     # TAKE CARE of flux standards
     # Add flux standards to science list
@@ -162,7 +160,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     df.loc[sel_idx, 'selected'] = True
 
     # Sort science targets by mjd
-    science_targets.sort_values('mjd', inplace=True)
+    science_targets.sort_values(by=[sortby], inplace=True)
     science_targets.reset_index(drop=True, inplace=True)
 
     # -------------------------------------------------------
@@ -186,7 +184,6 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
         science_targets.loc[index, 'slit_offset_x'] = offset_x
         science_targets.loc[index, 'slit_offset_y'] = offset_y
 
-
     num = 1
     # Resetting the comb_id and bkg_id values
     science_targets.loc[:, 'comb_id'] = None
@@ -197,17 +194,18 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
         bkgid = science_targets.loc[index, 'bkg_id']
         # Only populate comb_id and bkg_id, if they are empty
         if combid is None and bkgid is None:
-            if index+1 in science_targets.index:
+            if index + 1 in science_targets.index:
                 # Check if next telluric frame matches AB pattern
                 name = science_targets.loc[index, 'target']
-                next_name = science_targets.loc[index+1, 'target']
+                next_name = science_targets.loc[index + 1, 'target']
                 offset_diff = abs(science_targets.loc[index, 'slit_offset_x'] -
-                                  science_targets.loc[index+1, 'slit_offset_x'])
+                                  science_targets.loc[
+                                      index + 1, 'slit_offset_x'])
 
-                if name == next_name and offset_diff >2.5:
+                if name == next_name and offset_diff > 2.5:
                     science_targets.loc[index, 'comb_id'] = int(num)
-                    science_targets.loc[index+1, 'comb_id'] = int(num+1)
-                    science_targets.loc[index, 'bkg_id'] = int(num+1)
+                    science_targets.loc[index + 1, 'comb_id'] = int(num + 1)
+                    science_targets.loc[index, 'bkg_id'] = int(num + 1)
                     science_targets.loc[index + 1, 'bkg_id'] = int(num)
                     num += 2
 
@@ -222,12 +220,10 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
 
                 num += 1
 
-
-
     # Change frametype to 'tilt, arc,science'
     for idx, index in enumerate(science_targets.index):
         science_targets.loc[idx, 'calib'] = idx
-        science_targets.loc[index, 'frametype'] = 'tilt,arc,science'
+        science_targets.loc[index, 'frametype'] = 'arc,science,tilt'
 
     # TODO
     # Change frametype for flux standards to 'science'
@@ -246,10 +242,12 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
 
     for key in groups.indices.keys():
 
-        tell = df.query('frametype=="standard" and '
+        tell = df.query('(frametype=="standard" or '
+                        'frametype=="arc,standard,tilt") and '
                         'decker=="{}" and binning=="{}"'.format(key[0],
-                                                            key[1])).copy()
-
+                                                                key[1])).copy()
+        print('telluric table')
+        print(df)
         # For the science targets read the offsets along the slit and
         # rename telluric target name according to header keyword
         for index in tell.index:
@@ -270,7 +268,6 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
             target_name = tell.loc[index, 'target']
             target_name = ''.join(target_name.split(' '))
             tell.loc[index, 'target'] = target_name + '_tell'
-
 
         # Mark the selected tellurics frames
         sel_idx = tell.index
@@ -301,7 +298,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     tellurics.loc[:, 'bkg_id'] = None
     # Sort tellurics by mjd and reset index
     # The assumption is that AB patterns will be consecutive in MJD
-    tellurics.sort_values('mjd', inplace=True)
+    tellurics.sort_values(by=[sortby], inplace=True)
     tellurics.reset_index(drop=True, inplace=True)
 
     for index in tellurics.index:
@@ -309,17 +306,17 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
         bkgid = tellurics.loc[index, 'bkg_id']
         # Only populate comb_id and bkg_id, if they are empty
         if combid is None and bkgid is None:
-            if index+1 in tellurics.index:
+            if index + 1 in tellurics.index:
                 # Check if next telluric frame matches AB pattern
                 name = tellurics.loc[index, 'target']
-                next_name = tellurics.loc[index+1, 'target']
+                next_name = tellurics.loc[index + 1, 'target']
                 offset_diff = abs(tellurics.loc[index, 'slit_offset_x'] -
-                                  tellurics.loc[index+1, 'slit_offset_x'])
+                                  tellurics.loc[index + 1, 'slit_offset_x'])
 
-                if name == next_name and offset_diff >2:
+                if name == next_name and offset_diff > 2:
                     tellurics.loc[index, 'comb_id'] = int(num)
-                    tellurics.loc[index+1, 'comb_id'] = int(num+1)
-                    tellurics.loc[index, 'bkg_id'] = int(num+1)
+                    tellurics.loc[index + 1, 'comb_id'] = int(num + 1)
+                    tellurics.loc[index, 'bkg_id'] = int(num + 1)
                     tellurics.loc[index + 1, 'bkg_id'] = int(num)
                     num += 2
 
@@ -351,7 +348,6 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
                           'target=="GCALflat" and decker=="{}" and '
                           'binning=="{}"'.format(key[0], key[1])).copy()
 
-
         # # Select the pixelflats with the highest exposure time
         # pflats_exp_list = list(pflats.exptime.value_counts().index)
         # pflats.query('exptime=={}'.format(max(pflats_exp_list)), inplace=True)
@@ -376,19 +372,17 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
             # Prepare a string with the calib values
             calib = ''
             for cal in calib_ids:
-                calib += str(cal)+','
+                calib += str(cal) + ','
             # Remove trailing comma for calib string
             calib = calib[:-1]
             # Add calib string to pixelflat
-            pflats.loc[idx,'calib'] = calib
+            pflats.loc[idx, 'calib'] = calib
 
         pixelflats = pixelflats.append(pflats)
-
 
     # Create a dataframe with all not selected entries
     not_selected = df.query('selected==False').copy()
     not_selected.drop(labels='selected', axis=1, inplace=True)
-
 
     # Consolidate all selected frames in one DataFrame
     tellurics.drop(labels='slit_offset_x', axis=1, inplace=True)
@@ -402,23 +396,19 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True):
     pypeit_input = pypeit_input.append(pixelflats)
     pypeit_input.drop(labels='selected', axis=1, inplace=True)
 
-    pypeit_input.sort_values('mjd', inplace=True)
+    pypeit_input.sort_values(by=[sortby], inplace=True)
     pypeit_input.fillna("None", inplace=True)
-
 
     return pypeit_input, not_selected
 
 
-
-
 def prepare_gnirs_data(path, obj_name, remove_originals=False,
-                          verbosity=0, mode=None, delta_mjd=0.65):
-
+                       verbosity=0, mode=None, delta_mjd=0.65,
+                       sortby='mjd'):
     if mode is None or mode == 'data':
 
         if verbosity > 0:
             print('[INFO] Preparing GNIRS data')
-
 
             if not os.path.exists(path + '/reduced/{}'.format(obj_name)):
                 if verbosity > 0:
@@ -432,10 +422,8 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
                         obj_name))
                 os.makedirs(path + '/raw/{}/'.format(obj_name))
 
-
-
         # remove all non-necessary files
-        for file in glob.glob(path+'*.txt'):
+        for file in glob.glob(path + '*.txt'):
             if verbosity > 1:
                 print('[INFO] Removing unnecessary file {}'.format(file))
             os.remove(file)
@@ -477,7 +465,6 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
                                       save_name='fits_list',
                                       verbosity=verbosity)
 
-
         # Loop through fits list and delete or copy files to according folders
         if verbosity > 0:
             print('[INFO] Sorting and copying files into raw folder')
@@ -489,12 +476,11 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
             fits_name = filename.split('/')[-1]
 
             shutil.copy2(filename, '{}/raw/{}/{}'.format(path, obj_name,
-                                                              fits_name))
+                                                         fits_name))
             if remove_originals:
                 os.remove(filename)
 
-
-    if mode is None or mode=='cleanir':
+    if mode is None or mode == 'cleanir':
         if verbosity > 0:
             print('[INFO] Cleaning the fits files with cleanir.py')
 
@@ -504,9 +490,7 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
         for filename in glob.glob('N*.fits'):
             os.system('cleanir.py -fq --src=200:800,1:1024 "{}"'.format(
                 filename))
-            shutil.move(filename,'uncleaned/'+filename)
-
-
+            shutil.move(filename, 'uncleaned/' + filename)
 
     if mode is None or mode == 'setup':
 
@@ -519,10 +503,9 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
             print('[INFO] Run the preliminary pypeit_setup')
             print('[INFO] pypeit_setup -s gemini_gnirs -r {}'
                   '/'.format(relraw_path))
-        os.chdir(cwd+'/reduced/{}/'.format(obj_name))
+        os.chdir(cwd + '/reduced/{}/'.format(obj_name))
         os.system('pypeit_setup -s gemini_gnirs -r {}'
                   '/'.format(relraw_path))
-
 
         # Run full pypeit setups inside reduced folders
         os.chdir(path)
@@ -533,22 +516,20 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
             print('[INFO] Run the pypeit_setup')
             print('[INFO] pypeit_setup -s gemini_gnirs -r {}'
                   '/ -b -c=all'.format(relraw_path))
-        os.chdir(cwd+'/reduced/{}/'.format(obj_name))
+        os.chdir(cwd + '/reduced/{}/'.format(obj_name))
         # backup directory if it already exists
-        if os.path.isdir(cwd+'/reduced/{}/gemini_gnirs_A'.format(
+        if os.path.isdir(cwd + '/reduced/{}/gemini_gnirs_A'.format(
                 obj_name)):
-            orig_dir = cwd+'/reduced/{}/gemini_gnirs_A'.format(
+            orig_dir = cwd + '/reduced/{}/gemini_gnirs_A'.format(
                 obj_name)
             now = datetime.datetime.now()
-            backup_dir = cwd+'/reduced/{' \
-                             '0}/gemini_gnirs_A_backup_{1}'.format(
+            backup_dir = cwd + '/reduced/{' \
+                               '0}/gemini_gnirs_A_backup_{1}'.format(
                 obj_name, now.strftime("%Y-%m-%d_%H-%M"))
             copy_tree(orig_dir, backup_dir)
 
         os.system('pypeit_setup -s gemini_gnirs -r {}'
                   '/ -b -c=all'.format(relraw_path))
-
-
 
     if mode is None or mode == 'clean':
         os.chdir(path)
@@ -556,12 +537,12 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
         # Run the pypeit table cleaning algorithm for VIS
 
         if verbosity > 0:
-            print('[INFO] Preparing a clean pypeit input table for VIS')
+            print('[INFO] Preparing a clean pypeit input table')
         setup_path = cwd + '/reduced/{}' \
-                               '/setup_files'.format(obj_name)
+                           '/setup_files'.format(obj_name)
         raw_path = cwd + '/raw/{}/'.format(obj_name)
         sorted_files = glob.glob(setup_path +
-                                     '/gemini_gnirs_*.sorted')
+                                 '/gemini_gnirs_*.sorted')
 
         for file in sorted_files:
             if verbosity > 0:
@@ -570,12 +551,11 @@ def prepare_gnirs_data(path, obj_name, remove_originals=False,
             df = read_sorted_file(file)
             df.to_csv('{}.csv'.format(file_name))
             cleaned_df, not_selected = clean_nir_table(df, raw_path,
-                                                       delta_mjd=delta_mjd)
+                                                       delta_mjd=delta_mjd,
+                                                       sortby=sortby)
             cleaned_df.to_csv('{}_cleaned.csv'.format(file_name))
-            write_sorted_table(cleaned_df,'{}_suggested_table.txt'.format(file_name))
-            write_sorted_table(not_selected, '{}_disregarded_table.txt'.format(file_name))
-
-
-
-
-
+            write_sorted_table(cleaned_df, '{}_suggested_table.txt'.format(
+                file_name), sortby=sortby)
+            write_sorted_table(not_selected,
+                               '{}_disregarded_table.txt'.format(file_name),
+                               sortby=sortby)

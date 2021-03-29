@@ -27,7 +27,8 @@ template_signature_to_delete = ['XSHOOTER_slt_acq',
                                 'SHOOT_slt_cal_VISLampFlatSinglePinhole',
                                 'SHOOT_slt_cal_UVBVisArcsMultiplePinhole',
                                 'SHOOT_slt_acq',
-                                'SHOOT_slt_cal_NIRArcsMultiplePinhole']
+                                'SHOOT_slt_cal_NIRArcsMultiplePinhole',
+                                'SHOOT_gen_cal_Bias']
 
 obj_name_to_delete = ['LAMP,FMTCHK', 'LAMP,ORDERDEF', 'LAMP,AFC']
 
@@ -194,7 +195,7 @@ def make_image_df_xshooter(datapath, save=False, save_name=None, verbosity=0):
 
 
 
-def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
+def clean_nir_table(df, data_dir, delta_mjd=0.65, dark=True, std=False):
 
 
     # Change the airmass to a numeric value to sort on
@@ -232,7 +233,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
         if offset_y_name in hdr:
             offset_y = hdr[offset_y_name]
         else:
-            offset_x = 0
+            offset_y = 0
         science_targets.loc[index, 'slit_offset_x'] = offset_x
         science_targets.loc[index, 'slit_offset_y'] = offset_y
 
@@ -501,20 +502,23 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
                         'decker=="{}" and binning=="{}"'.format(key[0],
                                                                 key[1])).copy()
 
-        if bias:
-
-            for index in pflats.index:
-                filename = data_dir + pflats.loc[index, 'filename']
-                hdr = fits.open(filename)[0].header
-                obs_technique = hdr['HIERARCH ESO DPR TECH']
-
-                if obs_technique == 'IMAGE':
-                    pflats.loc[index, 'frametype'] = 'bias'
+        # DARKS ARE NOW RECOGNIZED BY PYPEIT
+        # if dark:
+        #
+        #     for index in pflats.index:
+        #         filename = data_dir + pflats.loc[index, 'filename']
+        #         hdr = fits.open(filename)[0].header
+        #         obs_technique = hdr['HIERARCH ESO DPR TECH']
+        #
+        #         if obs_technique == 'IMAGE':
+        #             pflats.loc[index, 'frametype'] = 'dark'
 
 
         # Select the pixelflats with the highest exposure time
-        pflats_exp_list = list(pflats.exptime.value_counts().index)
-        pflats.query('exptime=={}'.format(max(pflats_exp_list)), inplace=True)
+        # ATTENTION:Logic error here, what if later observations do not have as
+        # long pixelflats. I will deactivate this for now.
+        # pflats_exp_list = list(pflats.exptime.value_counts().index)
+        # pflats.query('exptime=={}'.format(max(pflats_exp_list)), inplace=True)
 
         # Mark the selected tellurics frames
         sel_idx = pflats.index
@@ -540,9 +544,56 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
             # Remove trailing comma for calib string
             calib = calib[:-1]
             # Add calib string to pixelflat
-            pflats.loc[idx,'calib'] = calib
+            pflats.loc[idx, 'calib'] = calib
 
         pixelflats = pixelflats.append(pflats)
+
+    # -------------------------------------------------------
+    # Darks
+    # -------------------------------------------------------
+
+    # Create empty bias DataFrame
+    darks = pd.DataFrame()
+
+
+    # Select biases with the same binning as science
+    # also impose same exposure time as pixelflats
+    print(pflats.loc[:,'exptime'].unique())
+    pflats_exptime = pflats.loc[:,'exptime'].unique()
+    for key in groups.indices.keys():
+        bs = df.query('frametype=="dark" and '
+                      'target=="LAMP,FLAT" and'
+                      ' binning=="{}"'.format(key[1])).copy()
+
+        # Mark the selected tellurics frames
+        sel_idx = bs.index
+        df.loc[sel_idx, 'selected'] = True
+
+        # Select science files with same binning
+        sci = science_targets.copy()
+        sci = sci.query('binning=="{}"'.format(key[1]))
+
+        # Loop through all biases to populate the calib values
+        for idx in bs.index:
+            if bs.loc[idx, 'exptime'] in pflats_exptime:
+                print(bs.loc[idx, 'exptime'])
+                mjd = bs.loc[idx, 'mjd']
+                # Select all science image calib values within +-0.65 mjd
+                calib_ids = sci.query('{0:}-{1:} <= mjd <= {0:}+{1:}'.format(
+                    mjd, delta_mjd)).calib.value_counts().index
+                # Prepare a string with the calib values
+                calib = ''
+                for cal in calib_ids:
+                    calib += str(cal) + ','
+                # Remove trailing comma for calib string
+                calib = calib[:-1]
+                # Add calib string to pixelflat
+                bs.loc[idx, 'calib'] = calib
+            else:
+                # Drop darks with different exptime as pixelflats
+                bs.drop(index=idx, inplace=True)
+
+        darks = darks.append(bs)
 
 
     # Create a dataframe with all not selected entries
@@ -562,6 +613,7 @@ def clean_nir_table(df, data_dir, delta_mjd=0.65, bias=True, std=False):
     if tellurics is not None:
         pypeit_input = pypeit_input.append(tellurics)
     pypeit_input = pypeit_input.append(pixelflats)
+    pypeit_input = pypeit_input.append(darks)
     pypeit_input.drop(labels='selected', axis=1, inplace=True)
 
     pypeit_input.sort_values('mjd', inplace=True)
@@ -732,8 +784,8 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65, std=False):
 
     # Select biases with the same binning as science
     for key in groups.indices.keys():
-        bs = df.query('frametype=="bias" and target=="BIAS" and '
-                          'binning=="{}"'.format(key[1])).copy()
+        bs = df.query('frametype=="bias" and '
+                      'target=="BIAS" and binning=="{}"'.format(key[1])).copy()
 
         # Mark the selected tellurics frames
         sel_idx = bs.index
@@ -769,8 +821,9 @@ def clean_vis_table(df, data_dir, delta_mjd=0.65, std=False):
 
     for key in groups.indices.keys():
         pflats = df.query('(frametype=="pixelflat,trace" or '
-                          'frametype=="trace,pixelflat") and target=="LAMP,'
-                          'FLAT" and '
+                          'frametype=="trace,pixelflat" or '
+                          'frametype=="pixelflat,illumflat,trace") and '
+                          'target=="LAMP,FLAT" and '
                           'decker=="{}" and binning=="{}"'.format(key[0],
                                                                   key[1])).copy()
         # Select the pixelflats with the highest exposure time

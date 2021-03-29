@@ -7,10 +7,10 @@ import sort_gnirs
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description="""
-            Automatic preparation of XShooter data for PypeIT. This 
-            routine works on the 'raw' downloaded XShooter files. It extracts
-            them, deletes unncessary files, copies them into NIR/VIS folders,
-            and runs pypeit_setup on the VIS/NIR folders. 
+            Automatic preparation of GNIRS data for PypeIT. This 
+            routine works on the 'raw' downloaded GNRIS files. It extracts
+            them, deletes unncessary files, copies them,
+            and runs pypeit_setup. 
             """,
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
@@ -19,7 +19,7 @@ def parse_arguments():
 
     parser.add_argument('-d', '--datadir', required=False, type=str,
                         help='Path to the directory with the downloaded '
-                             'XShooter data.')
+                             'GNIRS data.')
 
     parser.add_argument('-v', '--verbosity', required=False, type=int,
                         help='Parameter to set verbosity. It is advised to '
@@ -40,6 +40,12 @@ def parse_arguments():
                              'which sets the association of bias, arc and '
                              'pixelflats to the science "calib" file. The '
                              'default value is 0.65')
+
+    parser.add_argument('--sortby', required=False, type=str,
+                        help='String to reference either the "mjd" or the '
+                             '"filename" by which observation files are '
+                             'sorted. If the mjd header information is '
+                             'incorrect the filename might be better to use.')
 
     # parser.add_argument('-std', '--standard', required=False, type=str,
     #                     default=False, help='Boolean to consider to use or '
@@ -77,7 +83,13 @@ if __name__ == '__main__':
     else:
         delta_mjd = 0.65
 
+    if args.sortby is not None:
+        sortby = args.sortby
+    else:
+        sortby = 'mjd'
+
     sort_gnirs.prepare_gnirs_data(path, obj_name,
                                         remove_originals=remove,
                                         verbosity=verbosity,
-                                        mode=mode,  delta_mjd=delta_mjd)
+                                        mode=mode,  delta_mjd=delta_mjd,
+                                  sortby=sortby)
