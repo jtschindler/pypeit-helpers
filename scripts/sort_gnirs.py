@@ -17,14 +17,7 @@ from astropy.table import Table
 
 from distutils.dir_util import copy_tree
 
-template_signature_to_delete = ['XSHOOTER_slt_acq',
-                                'XSHOOTER_slt_cal_NIRArcsMultiplePinhole',
-                                'XSHOOTER_slt_cal_VISLampFlatSinglePinhole',
-                                'XSHOOTER_slt_cal_UVBVisArcsSinglePinhole',
-                                'XSHOOTER_slt_cal_UVBVisArcsMultiplePinhole',
-                                'XSHOOTER_slt_cal_NIRLampFlatSinglePinhole',
-                                'XSHOOTER_slt_cal_NIRArcsSinglePinhole',
-                                'XSHOOTER_slt_cal_NIRLampFlatSinglePinhole']
+template_signature_to_delete = ['LgPinholes_G5530']
 
 obj_name_to_delete = ['LAMP,FMTCHK', 'LAMP,ORDERDEF', 'LAMP,AFC']
 

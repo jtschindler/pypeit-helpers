@@ -1062,7 +1062,8 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
         # Run full pypeit setups inside reduced folders
         os.chdir(path)
         cwd = os.getcwd()
-        #rawobj_path = cwd+'/raw/{}'.format(obj_name)
+        print('CWD, OBJNAME:', cwd, obj_name)
+        # rawobj_path = cwd+'/raw/{}'.format(obj_name)
         relraw_path = '../../../raw/{}'.format(obj_name)
 
         if arm is None or arm == "VIS":
@@ -1070,16 +1071,18 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                 print('[INFO] Run the VIS pypeit_setup')
                 print('[INFO] pypeit_setup -s vlt_xshooter_vis -r {}'
                       '/VIS/ -b -c=all'.format(relraw_path))
-            os.chdir(cwd+'/reduced/{}/VIS/'.format(obj_name))
+            # os.chdir(cwd+'/{}/VIS'.format(obj_name))
             # backup directory if it already exists
-            if os.path.isdir(cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+            # if os.path.isdir(cwd + '/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+            if os.path.isdir(cwd+'/vlt_xshooter_vis_A'.format(
                     obj_name)):
-                orig_dir = cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+                # orig_dir = cwd+'/reduced/{}/VIS/vlt_xshooter_vis_A'.format(
+                orig_dir=cwd + '/vlt_xshooter_vis_A'.format(
                     obj_name)
                 now = datetime.datetime.now()
-                backup_dir = cwd+'/reduced/{' \
-                                 '0}/VIS/vlt_xshooter_vis_A_backup_{1}'.format(
-                    obj_name,now.strftime("%Y-%m-%d_%H-%M"))
+                # backup_dir = cwd + '/reduced/{' \
+                #                    '0}/VIS/vlt_xshooter_vis_A_backup_{1}'.format(
+                backup_dir = cwd+'/vlt_xshooter_vis_A_backup_{1}'.format(now.strftime("%Y-%m-%d_%H-%M"))
                 copy_tree(orig_dir, backup_dir)
                 
             os.system('pypeit_setup -s vlt_xshooter_vis -r {}'
@@ -1090,16 +1093,20 @@ def prepare_xshooter_data(path, obj_name, remove_originals=False,
                 print('[INFO] Run the NIR pypeit_setup')
                 print('[INFO] pypeit_setup -s vlt_xshooter_nir -r {}'
                       '/NIR/ -b -c=all'.format(relraw_path))
-            os.chdir(cwd + '/reduced/{}/NIR/'.format(obj_name))
+            # os.chdir(cwd + '/{}/NIR'.format(obj_name))
             # backup directory if it already exists
-            if os.path.isdir(cwd+'/reduced/{}/NIR/vlt_xshooter_nir_A'.format(
+            # if os.path.isdir(cwd + '/reduced/{}/NIR/vlt_xshooter_nir_A'.format(
+            if os.path.isdir(cwd+'/vlt_xshooter_nir_A'.format(
                     obj_name)):
-                orig_dir = cwd+'/reduced/{}/NIR/vlt_xshooter_nir_A'.format(
+                # orig_dir = cwd + '/reduced/{}/NIR/vlt_xshooter_nir_A'.format(
+                orig_dir = cwd+'/vlt_xshooter_nir_A'.format(
                     obj_name)
                 now = datetime.datetime.now()
-                backup_dir = cwd+'/reduced/{' \
-                                 '0}/NIR/vlt_xshooter_nir_A_backup_{1}'.format(
-                    obj_name,now.strftime("%Y-%m-%d_%H-%M"))
+                backup_dir = cwd + '/vlt_xshooter_nir_A_backup_{1}'.format(
+                    now.strftime("%Y-%m-%d_%H-%M"))
+                # backup_dir = cwd+'/reduced/{' \
+                #                  '0}/NIR/vlt_xshooter_nir_A_backup_{1}'.format(
+                #     obj_name,now.strftime("%Y-%m-%d_%H-%M"))
                 copy_tree(orig_dir, backup_dir)
 
             os.system('pypeit_setup -s vlt_xshooter_nir -r {}'
