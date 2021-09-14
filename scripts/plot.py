@@ -20,7 +20,12 @@ purple = (204/255., 121/255., 167/255.)
 
 def get_plot_ylim_specobj(sobj):
 
-    flux = sobj['OPT_FLAM'][sobj['OPT_MASK']]
+    if sobj['OPT_FLAM'] is not None:
+        flux = sobj['OPT_FLAM'][sobj['OPT_MASK']]
+    elif sobj['OPT_COUNTS'] is not None:
+        flux = sobj['OPT_COUNTS'][sobj['OPT_MASK']]
+    else:
+        raise ValueError('[ERROR] Could not find COUNTS or FLAM in SpecObj')
 
     return get_plot_ylim(flux)
 
@@ -71,7 +76,15 @@ def plot_pypeit_specobjs(specobjects, smooth=None, ymin=None, ymax=None):
             color = dblue
 
         mask = sobj['OPT_MASK']
-        flux = sobj['OPT_FLAM']
+        if 'OPT_FLAM' in sobj.__dict__.keys() and sobj['OPT_FLAM'] is not None:
+            flux = sobj['OPT_FLAM']
+            ax.set_ylabel(r'Flux density ($10^{-17}\rm{erg}/\rm{s}\rm{cm}^2/\rm{\AA}$)')
+        elif 'OPT_COUNTS' in sobj.__dict__.keys() and sobj['OPT_COUNTS'] is \
+                not None:
+            flux = sobj['OPT_COUNTS']
+            ax.set_ylabel(r'Counts')
+        else:
+            raise ValueError('[ERROR] Could not find COUNTS or FLAM in SpecObj')
 
         if isinstance(smooth, int):
             flux = smooth_flux(flux, smooth)
@@ -88,7 +101,8 @@ def plot_pypeit_specobjs(specobjects, smooth=None, ymin=None, ymax=None):
         ax.set_ylim(ymin, ylims[1])
 
     ax.set_xlabel(r'Wavelength ($\rm{\AA}$)')
-    ax.set_ylabel(r'Flux density ($10^{-17}\rm{erg}/\rm{s}\rm{cm}^2/\rm{\AA}$)')
+
+
 
     plt.legend()
     plt.show()

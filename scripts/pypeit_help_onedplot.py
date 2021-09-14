@@ -14,7 +14,7 @@ def parse_arguments():
     parser.add_argument('filename', type=str,
                         help='Filename of spectrum to plot')
 
-    parser.add_argument('-s', '--smooth', required=False, type=float,
+    parser.add_argument('-s', '--smooth', required=False, type=int,
                         help='Number of pixels for a simple boxcar smoothing '
                              'of the spectrum.',
                         default=None)
@@ -33,6 +33,8 @@ def parse_arguments():
 if __name__ == '__main__':
 
     args = parse_arguments()
+
+    print(args.smooth)
 
     plot.plot_pypeit_spectrum(args.filename,
                               smooth=args.smooth,
