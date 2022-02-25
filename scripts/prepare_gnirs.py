@@ -7,19 +7,17 @@ import sort_gnirs
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description="""
-            Automatic preparation of GNIRS data for PypeIT. This 
+            Automatic preparation of GNIRS data for PypeIT. This
             routine works on the 'raw' downloaded GNRIS files. It extracts
             them, deletes unncessary files, copies them,
-            and runs pypeit_setup. 
+            and runs pypeit_setup.
             """,
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('-o', '--object_name', required=True, type=str,
-                        help='')
 
     parser.add_argument('-d', '--datadir', required=False, type=str,
                         help='Path to the directory with the downloaded '
-                             'GNIRS data.')
+                             'GNIRS data. Deprecated!')
 
     parser.add_argument('-v', '--verbosity', required=False, type=int,
                         help='Parameter to set verbosity. It is advised to '
@@ -31,8 +29,15 @@ def parse_arguments():
 
     parser.add_argument('-m', '--mode', required=False, type=str,
                         help='Set mode to "data"= data preparation only, '
-                             '"setup" = run setup files only, or "clean" = '
-                             'provide clean setup tables only')
+                             '"setup" = run setup files only, or "prepare" = '
+                             'provide prepared setup tables only')
+
+    parser.add_argument('-c', '--cleaned_data', required=False, type=str,
+                        help='Whether cleaned frames or uncleaned frames should be considered.')
+
+    parser.add_argument('-calib', '--calibrations', required=False, type=str,
+                        help='Should calibration ids be populate for '
+                             '"individual" scienc exposures or treated as the "same" for all. Default: "same"')
 
     parser.add_argument('--deltamjd', required=False, type=str,
                         help='Set the value for the maximum difference in '
@@ -58,10 +63,6 @@ if __name__ == '__main__':
 
     args = parse_arguments()
 
-    if args.object_name is not None:
-        obj_name = args.object_name
-    else:
-        obj_name = 'UNNAMED_OBJECT'
     if args.datadir is not None:
         path = args.datadir
     else:
@@ -88,8 +89,19 @@ if __name__ == '__main__':
     else:
         sortby = 'mjd'
 
-    sort_gnirs.prepare_gnirs_data(path, obj_name,
-                                        remove_originals=remove,
-                                        verbosity=verbosity,
-                                        mode=mode,  delta_mjd=delta_mjd,
-                                  sortby=sortby)
+    if args.cleaned_data is None:
+        cleaned_data = False
+    else:
+        cleaned_data = args.cleaned_data
+
+    if args.calibrations is None:
+        calibrations = 'same'
+    else:
+        calibrations = args.calibrations
+
+    sort_gnirs.prepare_gnirs_data(path,
+                                  remove_originals=remove,
+                                  verbosity=verbosity,
+                                  mode=mode,  delta_mjd=delta_mjd,
+                                  sortby=sortby, cleaned_data=cleaned_data,
+                                  calibrations=calibrations)

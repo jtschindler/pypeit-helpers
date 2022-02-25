@@ -108,12 +108,13 @@ def plot_pypeit_specobjs(specobjects, smooth=None, ymin=None, ymax=None):
     plt.show()
 
 
-def plot_pypeit_onespec(hdu, smooth=None, ymin=None, ymax=None):
+def plot_pypeit_onespec(hdu, smooth=None, ymin=None, ymax=None,
+                        comparison=None):
     # Set up plot
     fig, ax = plt.subplots(nrows=1, ncols=1,
                            figsize=(15, 7),
                            dpi=140)
-    fig.subplots_adjust(left=0.09, right=0.97, top=0.89, bottom=0.16)
+    fig.subplots_adjust(left=0.09, right=0.92, top=0.89, bottom=0.16)
 
     # Plot the PypeIt Specobjs files
     ax.axhline(y=0.0, linewidth=1.5, color='k', linestyle=':',
@@ -121,13 +122,43 @@ def plot_pypeit_onespec(hdu, smooth=None, ymin=None, ymax=None):
 
     spec = hdu[1].data
 
+
     mask = np.array(spec['mask'], dtype=bool)
     flux = spec['flux']
+    ivar = spec['ivar']
+
+    if 'telluric' in hdu[1].data.columns.names:
+        ax2 = ax.twinx()
+
+        ax2.plot(spec['wave'][mask], spec['telluric'][mask], color=dblue,
+                 label='telluric model', zorder=0)
+        ax2.axhline(y=00, lw=1.5, color=dblue, ls=':', zorder=0)
+        ax2.set_ylim(-1, 1)
+
+        ax2.set_ylabel('Telluric model')
+        ax2.legend()
+        ax.set_zorder(ax2.get_zorder() + 1)
 
     if isinstance(smooth, int):
         flux = smooth_flux(flux, smooth)
 
-    ax.plot(spec['wave'][mask], flux[mask], color='k', lw=1.5)
+    ax.plot(spec['wave'][mask], flux[mask], color='k', lw=1.5, label='flux')
+
+    ax.plot(spec['wave'][mask], 1/np.sqrt(ivar[mask]), color='0.5', lw=3,
+            label='flux error')
+
+    if 'obj_model' in hdu[1].data.columns.names:
+        ax.plot(spec['wave'][mask], spec['obj_model'][mask], color=vermillion,
+                lw=2, label='object model')
+
+    if comparison is not None:
+        hdu2 = fits.open(comparison)
+        if hdu2[1].header['DMODCLS'] == 'OneSpec':
+
+            spec2 = hdu2[1].data
+            mask2 = np.array(spec2['mask'], dtype=bool)
+            ax.plot(spec2['wave'][mask2], spec2['flux'][mask2], color=green,
+                    lw=1.5, label='comparison spectrum')
 
     # Set plot limits
     ylims = get_plot_ylim(spec['flux'][mask])
@@ -141,11 +172,16 @@ def plot_pypeit_onespec(hdu, smooth=None, ymin=None, ymax=None):
     ax.set_xlabel(r'Wavelength ($\rm{\AA}$)')
     ax.set_ylabel(r'Flux density ($10^{-17}\rm{erg}/\rm{s}\rm{cm}^2/\rm{\AA}$)')
 
-    plt.legend()
+
+    ax.patch.set_visible(False)  # hide the 'canvas'
+
+    ax.legend()
+
     plt.show()
 
 
-def plot_pypeit_spectrum(filename, smooth=None, ymin=None, ymax=None):
+def plot_pypeit_spectrum(filename, smooth=None, ymin=None, ymax=None,
+                         comparison=None):
 
     hdu = fits.open(filename)
 
@@ -153,14 +189,8 @@ def plot_pypeit_spectrum(filename, smooth=None, ymin=None, ymax=None):
         sobjs = read_pypeit_specobjs(filename)
         plot_pypeit_specobjs(sobjs, smooth=smooth, ymin=ymin, ymax=ymax)
     elif hdu[1].header['DMODCLS'] == 'OneSpec':
-        plot_pypeit_onespec(hdu, smooth=smooth, ymin=ymin, ymax=ymax)
+        plot_pypeit_onespec(hdu, smooth=smooth, ymin=ymin, ymax=ymax,
+                            comparison=comparison)
     else:
         raise ValueError('[ERROR] PypeIt spectrum datatype not understood.')
 
-
-# plot_pypeit_spectrum(
-#     '../example_data/spec1d_XSHOO.2016-08-05T06_46_31.480'
-#     '-VIKJ2318m3113_XShooter_VIS_2016Aug05T064631.480.fits', smooth=10)
-# plot_pypeit_spectrum('../example_data/spec1d_coadd_J2318-3113_nir_01.fits',
-#                      smooth=20)
-#
